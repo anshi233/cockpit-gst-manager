@@ -165,5 +165,13 @@ Target: <1GB for management (GStreamer pipelines excluded)
 
 ## Related Documents
 
-- [guidelines.md](./guidelines.md) - Project rules and coding standards
-- [api.md](./api.md) - D-Bus API specification
+- [guidelines.md](./guidelines.md) - Coding standards, git workflow
+- [api.md](./api.md) - D-Bus API specification (14 methods)
+- [ai_tools.md](./ai_tools.md) - AI tool definitions (7 tools)
+- [ai_framework_investigation.md](./ai_framework_investigation.md) - Framework comparison
+- [gstreamer_knowledge_base.md](./gstreamer_knowledge_base.md) - AI system prompt content
+- [localization.md](./localization.md) - EN + Chinese translations
+- [error_recovery.md](./error_recovery.md) - Recovery strategy
+- [hdmi_detection.md](./hdmi_detection.md) - HDMI signal monitoring
+- [testing.md](./testing.md) - Testing strategy
+
