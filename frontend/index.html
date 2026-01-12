@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GStreamer Manager</title>
+
+    <!-- Cockpit base scripts -->
+    <script src="../base1/cockpit.js"></script>
+
+    <!-- Local styles -->
+    <link rel="stylesheet" href="gst-manager.css">
+</head>
+
+<body>
+    <div id="gst-app">
+        <!-- Header -->
+        <header class="gst-header">
+            <h1 class="gst-title">GStreamer Manager</h1>
+            <div class="gst-header-actions">
+                <button id="btn-ai-toggle" class="gst-btn gst-btn-accent" title="AI Assistant">
+                    AI Assistant
+                </button>
+                <button id="btn-refresh" class="gst-btn gst-btn-secondary" title="Refresh">
+                    Refresh
+                </button>
+                <button id="btn-new-instance" class="gst-btn gst-btn-primary">
+                    New Instance
+                </button>
+            </div>
+        </header>
+
+        <!-- Main content area -->
+        <main class="gst-main">
+            <!-- Sidebar: Board Context -->
+            <aside class="gst-sidebar">
+                <!-- HDMI Status -->
+                <section class="gst-panel gst-hdmi-panel">
+                    <h2 class="gst-panel-title">HDMI Input</h2>
+                    <div id="hdmi-status" class="gst-hdmi-status">
+                        <div class="gst-hdmi-indicator">
+                            <span id="hdmi-signal-dot" class="gst-signal-dot gst-signal-off"></span>
+                            <span id="hdmi-signal-text">No Signal</span>
+                        </div>
+                        <div id="hdmi-resolution" class="gst-hdmi-resolution">-</div>
+                    </div>
+                </section>
+
+                <section class="gst-panel">
+                    <h2 class="gst-panel-title">Hardware</h2>
+                    <div id="board-context" class="gst-board-context">
+                        <p class="gst-loading">Loading...</p>
+                    </div>
+                </section>
+            </aside>
+
+            <!-- Main content: Instance list and editor -->
+            <div class="gst-content">
+                <!-- Instances list -->
+                <section class="gst-panel gst-instances-panel">
+                    <h2 class="gst-panel-title">Pipeline Instances</h2>
+                    <div id="instances-list" class="gst-instances-list">
+                        <p class="gst-empty-state">No instances configured</p>
+                    </div>
+                </section>
+
+                <!-- Pipeline Editor (shown when editing/creating) -->
+                <section id="pipeline-editor" class="gst-panel gst-editor-panel" style="display: none;">
+                    <h2 class="gst-panel-title">
+                        <span id="editor-title">New Instance</span>
+                        <button id="btn-close-editor" class="gst-btn-icon" title="Close">X</button>
+                    </h2>
+                    <div class="gst-editor-content">
+                        <div class="gst-form-group">
+                            <label for="instance-name">Name</label>
+                            <input type="text" id="instance-name" class="gst-input"
+                                placeholder="e.g., HDMI to SRT Stream">
+                        </div>
+                        <div class="gst-form-group">
+                            <label for="instance-pipeline">Pipeline Command</label>
+                            <textarea id="instance-pipeline" class="gst-textarea gst-pipeline-input" rows="6"
+                                placeholder="v4l2src device=/dev/vdin1 ! video/x-raw,format=NV12 ! aml_h264enc bitrate=20000000 ! h264parse ! mpegtsmux ! srtsink uri=&quot;srt://0.0.0.0:5000?mode=listener&quot;"></textarea>
+                        </div>
+                        <div class="gst-editor-actions">
+                            <button id="btn-cancel-edit" class="gst-btn gst-btn-secondary">Cancel</button>
+                            <button id="btn-save-instance" class="gst-btn gst-btn-primary">Save</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Instance detail view (shown when instance selected) -->
+                <section id="instance-detail" class="gst-panel gst-detail-panel" style="display: none;">
+                    <h2 class="gst-panel-title">
+                        <span id="detail-title">Instance Details</span>
+                        <button id="btn-close-detail" class="gst-btn-icon" title="Close">X</button>
+                    </h2>
+                    <div class="gst-detail-content">
+                        <div class="gst-detail-status">
+                            <span class="gst-label">Status:</span>
+                            <span id="detail-status" class="gst-status-badge">stopped</span>
+                        </div>
+                        <div class="gst-detail-info">
+                            <div class="gst-info-row">
+                                <span class="gst-label">PID:</span>
+                                <span id="detail-pid">-</span>
+                            </div>
+                            <div class="gst-info-row">
+                                <span class="gst-label">Uptime:</span>
+                                <span id="detail-uptime">-</span>
+                            </div>
+                            <div class="gst-info-row">
+                                <span class="gst-label">Error:</span>
+                                <span id="detail-error" class="gst-error-text">-</span>
+                            </div>
+                            <div class="gst-info-row">
+                                <span class="gst-label">Autostart:</span>
+                                <label class="gst-toggle">
+                                    <input type="checkbox" id="detail-autostart">
+                                    <span class="gst-toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="gst-info-row" id="trigger-row" style="display: none;">
+                                <span class="gst-label">Trigger:</span>
+                                <select id="detail-trigger" class="gst-select">
+                                    <option value="">On boot</option>
+                                    <option value="hdmi_signal_ready">HDMI signal ready</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="gst-detail-pipeline">
+                            <span class="gst-label">Pipeline:</span>
+                            <pre id="detail-pipeline" class="gst-code-block"></pre>
+                        </div>
+                        <div class="gst-detail-actions">
+                            <button id="btn-start-instance" class="gst-btn gst-btn-success">Start</button>
+                            <button id="btn-stop-instance" class="gst-btn gst-btn-warning">Stop</button>
+                            <button id="btn-record-instance" class="gst-btn gst-btn-danger" disabled>Record</button>
+                            <button id="btn-edit-instance" class="gst-btn gst-btn-secondary">Edit</button>
+                            <button id="btn-delete-instance" class="gst-btn gst-btn-danger">Delete</button>
+                        </div>
+                        <!-- Error Logs Panel -->
+                        <div id="logs-panel" class="gst-logs-panel" style="display: none;">
+                            <div class="gst-logs-header">
+                                <span class="gst-label">Logs:</span>
+                                <button id="btn-clear-logs" class="gst-btn-icon" title="Clear logs">Clear</button>
+                            </div>
+                            <pre id="detail-logs" class="gst-code-block gst-logs-content"></pre>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- Toast notifications -->
+        <div id="toast-container" class="gst-toast-container"></div>
+
+        <!-- AI Chat Panel -->
+        <aside id="ai-chat-panel" class="gst-ai-panel" style="display: none;">
+            <div class="gst-ai-header">
+                <span class="gst-ai-title">AI Pipeline Assistant</span>
+                <button id="btn-ai-close" class="gst-btn-icon" onclick="AiChat.toggle()">X</button>
+            </div>
+            <div id="ai-messages" class="gst-ai-messages"></div>
+            <div class="gst-ai-input-row">
+                <textarea id="ai-input" class="gst-textarea" rows="2"
+                    placeholder="Describe what you want to stream..."></textarea>
+                <button id="btn-ai-send" class="gst-btn gst-btn-primary">Send</button>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Application scripts -->
+    <script src="pipeline-editor.js"></script>
+    <script src="ai-chat.js"></script>
+    <script src="gst-manager.js"></script>
+</body>
+
+</html>

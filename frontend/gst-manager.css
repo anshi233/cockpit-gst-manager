@@ -1,0 +1,749 @@
+/**
+ * GStreamer Manager - CSS Styles
+ * 
+ * Uses gst- prefix for all custom classes.
+ * PatternFly variables used where applicable.
+ */
+
+/* CSS Variables for theming */
+:root {
+    --gst-color-primary: #0066cc;
+    --gst-color-primary-hover: #004d99;
+    --gst-color-success: #3e8635;
+    --gst-color-warning: #f0ab00;
+    --gst-color-danger: #c9190b;
+    --gst-color-info: #2b9af3;
+
+    --gst-color-bg: #f0f0f0;
+    --gst-color-bg-card: #ffffff;
+    --gst-color-bg-dark: #212427;
+
+    --gst-color-text: #151515;
+    --gst-color-text-muted: #6a6e73;
+    --gst-color-text-light: #ffffff;
+
+    --gst-color-border: #d2d2d2;
+    --gst-color-border-dark: #8a8d90;
+
+    --gst-spacing-xs: 4px;
+    --gst-spacing-sm: 8px;
+    --gst-spacing-md: 16px;
+    --gst-spacing-lg: 24px;
+    --gst-spacing-xl: 32px;
+
+    --gst-radius: 4px;
+    --gst-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    --gst-shadow-hover: 0 2px 6px rgba(0, 0, 0, 0.16);
+
+    --gst-font-family: "RedHatText", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --gst-font-mono: "RedHatMono", "Liberation Mono", monospace;
+}
+
+/* Reset & Base */
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: var(--gst-font-family);
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--gst-color-text);
+    background-color: var(--gst-color-bg);
+}
+
+/* App Container */
+#gst-app {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header */
+.gst-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--gst-spacing-md) var(--gst-spacing-lg);
+    background-color: var(--gst-color-bg-dark);
+    color: var(--gst-color-text-light);
+}
+
+.gst-title {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 500;
+}
+
+.gst-header-actions {
+    display: flex;
+    gap: var(--gst-spacing-sm);
+}
+
+/* Main Layout */
+.gst-main {
+    display: flex;
+    flex: 1;
+    padding: var(--gst-spacing-lg);
+    gap: var(--gst-spacing-lg);
+}
+
+.gst-sidebar {
+    width: 280px;
+    flex-shrink: 0;
+}
+
+.gst-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: var(--gst-spacing-lg);
+}
+
+/* Panels */
+.gst-panel {
+    background-color: var(--gst-color-bg-card);
+    border: 1px solid var(--gst-color-border);
+    border-radius: var(--gst-radius);
+    box-shadow: var(--gst-shadow);
+}
+
+.gst-panel-title {
+    margin: 0;
+    padding: var(--gst-spacing-md);
+    font-size: 16px;
+    font-weight: 500;
+    border-bottom: 1px solid var(--gst-color-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* Buttons */
+.gst-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--gst-spacing-sm) var(--gst-spacing-md);
+    font-size: 14px;
+    font-weight: 500;
+    border: none;
+    border-radius: var(--gst-radius);
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.gst-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.gst-btn-primary {
+    background-color: var(--gst-color-primary);
+    color: var(--gst-color-text-light);
+}
+
+.gst-btn-primary:hover:not(:disabled) {
+    background-color: var(--gst-color-primary-hover);
+}
+
+.gst-btn-secondary {
+    background-color: var(--gst-color-bg);
+    color: var(--gst-color-text);
+    border: 1px solid var(--gst-color-border-dark);
+}
+
+.gst-btn-secondary:hover:not(:disabled) {
+    background-color: var(--gst-color-border);
+}
+
+.gst-btn-success {
+    background-color: var(--gst-color-success);
+    color: var(--gst-color-text-light);
+}
+
+.gst-btn-success:hover:not(:disabled) {
+    background-color: #2e6c2b;
+}
+
+.gst-btn-warning {
+    background-color: var(--gst-color-warning);
+    color: var(--gst-color-text);
+}
+
+.gst-btn-warning:hover:not(:disabled) {
+    background-color: #d99700;
+}
+
+.gst-btn-danger {
+    background-color: var(--gst-color-danger);
+    color: var(--gst-color-text-light);
+}
+
+.gst-btn-danger:hover:not(:disabled) {
+    background-color: #a2150a;
+}
+
+.gst-btn-icon {
+    background: none;
+    border: none;
+    font-size: 16px;
+    cursor: pointer;
+    padding: var(--gst-spacing-xs);
+    color: var(--gst-color-text-muted);
+}
+
+.gst-btn-icon:hover {
+    color: var(--gst-color-text);
+}
+
+/* Form Elements */
+.gst-form-group {
+    margin-bottom: var(--gst-spacing-md);
+}
+
+.gst-form-group label {
+    display: block;
+    margin-bottom: var(--gst-spacing-xs);
+    font-weight: 500;
+}
+
+.gst-input,
+.gst-textarea {
+    width: 100%;
+    padding: var(--gst-spacing-sm);
+    font-size: 14px;
+    font-family: inherit;
+    border: 1px solid var(--gst-color-border-dark);
+    border-radius: var(--gst-radius);
+}
+
+.gst-input:focus,
+.gst-textarea:focus {
+    outline: none;
+    border-color: var(--gst-color-primary);
+    box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.2);
+}
+
+.gst-pipeline-input {
+    font-family: var(--gst-font-mono);
+    font-size: 13px;
+    resize: vertical;
+}
+
+/* Instance Cards */
+.gst-instances-list {
+    padding: var(--gst-spacing-md);
+}
+
+.gst-instance-card {
+    padding: var(--gst-spacing-md);
+    margin-bottom: var(--gst-spacing-sm);
+    border: 1px solid var(--gst-color-border);
+    border-radius: var(--gst-radius);
+    cursor: pointer;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.gst-instance-card:hover {
+    border-color: var(--gst-color-primary);
+    box-shadow: var(--gst-shadow-hover);
+}
+
+.gst-instance-card.selected {
+    border-color: var(--gst-color-primary);
+    background-color: rgba(0, 102, 204, 0.05);
+}
+
+.gst-instance-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--gst-spacing-xs);
+}
+
+.gst-instance-name {
+    font-weight: 500;
+}
+
+.gst-instance-pipeline {
+    font-family: var(--gst-font-mono);
+    font-size: 12px;
+    color: var(--gst-color-text-muted);
+    word-break: break-all;
+}
+
+/* Status Badges */
+.gst-status-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 10px;
+    text-transform: capitalize;
+}
+
+.gst-status-stopped {
+    background-color: #e0e0e0;
+    color: var(--gst-color-text-muted);
+}
+
+.gst-status-running {
+    background-color: rgba(62, 134, 53, 0.15);
+    color: var(--gst-color-success);
+}
+
+.gst-status-starting,
+.gst-status-stopping {
+    background-color: rgba(43, 154, 243, 0.15);
+    color: var(--gst-color-info);
+}
+
+.gst-status-error {
+    background-color: rgba(201, 25, 11, 0.15);
+    color: var(--gst-color-danger);
+}
+
+.gst-status-waiting_signal {
+    background-color: rgba(240, 171, 0, 0.15);
+    color: var(--gst-color-warning);
+}
+
+/* Detail View */
+.gst-detail-content {
+    padding: var(--gst-spacing-md);
+}
+
+.gst-detail-status {
+    margin-bottom: var(--gst-spacing-md);
+}
+
+.gst-detail-info {
+    margin-bottom: var(--gst-spacing-md);
+}
+
+.gst-info-row {
+    display: flex;
+    margin-bottom: var(--gst-spacing-xs);
+}
+
+.gst-label {
+    font-weight: 500;
+    margin-right: var(--gst-spacing-sm);
+    min-width: 80px;
+}
+
+.gst-detail-pipeline {
+    margin-bottom: var(--gst-spacing-md);
+}
+
+.gst-code-block {
+    background-color: var(--gst-color-bg);
+    padding: var(--gst-spacing-md);
+    border-radius: var(--gst-radius);
+    font-family: var(--gst-font-mono);
+    font-size: 12px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin: var(--gst-spacing-sm) 0 0 0;
+}
+
+.gst-detail-actions {
+    display: flex;
+    gap: var(--gst-spacing-sm);
+    flex-wrap: wrap;
+}
+
+.gst-error-text {
+    color: var(--gst-color-danger);
+}
+
+/* Logs Panel */
+.gst-logs-panel {
+    margin-top: var(--gst-spacing-md);
+    border-top: 1px solid var(--gst-color-border);
+    padding-top: var(--gst-spacing-md);
+}
+
+.gst-logs-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--gst-spacing-xs);
+}
+
+.gst-logs-content {
+    max-height: 200px;
+    overflow-y: auto;
+    font-size: 11px;
+    color: var(--gst-color-danger);
+}
+
+/* Editor */
+.gst-editor-content {
+    padding: var(--gst-spacing-md);
+}
+
+.gst-editor-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--gst-spacing-sm);
+    margin-top: var(--gst-spacing-md);
+}
+
+/* Board Context / Hardware */
+.gst-board-context {
+    padding: var(--gst-spacing-md);
+}
+
+.gst-hw-section {
+    font-size: 13px;
+}
+
+.gst-hw-title {
+    font-size: 13px;
+    font-weight: 600;
+    margin: var(--gst-spacing-md) 0 var(--gst-spacing-sm) 0;
+    color: var(--gst-color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.gst-hw-title:first-child {
+    margin-top: 0;
+}
+
+.gst-hw-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.gst-hw-item {
+    padding: var(--gst-spacing-xs) 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.gst-hw-device {
+    font-family: var(--gst-font-mono);
+    font-size: 12px;
+}
+
+.gst-hw-type,
+.gst-hw-info {
+    font-size: 12px;
+    color: var(--gst-color-text-muted);
+}
+
+.gst-hw-available {
+    color: var(--gst-color-success);
+}
+
+.gst-hw-unavailable {
+    color: var(--gst-color-text-muted);
+    opacity: 0.6;
+}
+
+.gst-hw-empty {
+    color: var(--gst-color-text-muted);
+    font-style: italic;
+    margin: 0;
+}
+
+/* HDMI Status Panel */
+.gst-hdmi-panel {
+    margin-bottom: var(--gst-spacing-md);
+}
+
+.gst-hdmi-status {
+    padding: var(--gst-spacing-md);
+}
+
+.gst-hdmi-indicator {
+    display: flex;
+    align-items: center;
+    gap: var(--gst-spacing-sm);
+    margin-bottom: var(--gst-spacing-xs);
+}
+
+.gst-signal-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.gst-signal-on {
+    background-color: var(--gst-color-success);
+    box-shadow: 0 0 8px rgba(62, 134, 53, 0.6);
+}
+
+.gst-signal-off {
+    background-color: var(--gst-color-text-muted);
+}
+
+.gst-hdmi-resolution {
+    font-family: var(--gst-font-mono);
+    font-size: 13px;
+    color: var(--gst-color-text-muted);
+}
+
+/* Toggle Switch */
+.gst-toggle {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 22px;
+}
+
+.gst-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.gst-toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--gst-color-border-dark);
+    transition: 0.2s;
+    border-radius: 22px;
+}
+
+.gst-toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.2s;
+    border-radius: 50%;
+}
+
+.gst-toggle input:checked+.gst-toggle-slider {
+    background-color: var(--gst-color-primary);
+}
+
+.gst-toggle input:checked+.gst-toggle-slider:before {
+    transform: translateX(18px);
+}
+
+/* Select Dropdown */
+.gst-select {
+    padding: var(--gst-spacing-xs) var(--gst-spacing-sm);
+    font-size: 13px;
+    font-family: inherit;
+    border: 1px solid var(--gst-color-border-dark);
+    border-radius: var(--gst-radius);
+    background-color: var(--gst-color-bg-card);
+    cursor: pointer;
+    min-width: 150px;
+}
+
+.gst-select:focus {
+    outline: none;
+    border-color: var(--gst-color-primary);
+}
+
+/* States */
+.gst-loading {
+    color: var(--gst-color-text-muted);
+    font-style: italic;
+}
+
+.gst-empty-state {
+    color: var(--gst-color-text-muted);
+    text-align: center;
+    padding: var(--gst-spacing-xl);
+}
+
+/* Toast Notifications */
+.gst-toast-container {
+    position: fixed;
+    bottom: var(--gst-spacing-lg);
+    right: var(--gst-spacing-lg);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: var(--gst-spacing-sm);
+}
+
+.gst-toast {
+    padding: var(--gst-spacing-md);
+    border-radius: var(--gst-radius);
+    color: var(--gst-color-text-light);
+    box-shadow: var(--gst-shadow-hover);
+    animation: gst-slide-in 0.3s ease;
+}
+
+.gst-toast-info {
+    background-color: var(--gst-color-info);
+}
+
+.gst-toast-success {
+    background-color: var(--gst-color-success);
+}
+
+.gst-toast-warning {
+    background-color: var(--gst-color-warning);
+    color: var(--gst-color-text);
+}
+
+.gst-toast-error {
+    background-color: var(--gst-color-danger);
+}
+
+.gst-toast-fade {
+    animation: gst-fade-out 0.3s ease forwards;
+}
+
+@keyframes gst-slide-in {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes gst-fade-out {
+    from {
+        opacity: 1;
+    }
+
+    to {
+        opacity: 0;
+    }
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+    .gst-main {
+        flex-direction: column;
+    }
+
+    .gst-sidebar {
+        width: 100%;
+    }
+}
+
+/* AI Chat Panel */
+.gst-btn-accent {
+    background-color: #7b2cbf;
+    color: var(--gst-color-text-light);
+}
+
+.gst-btn-accent:hover:not(:disabled) {
+    background-color: #5a1d8f;
+}
+
+.gst-ai-panel {
+    position: fixed;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 400px;
+    max-width: 100%;
+    background-color: var(--gst-color-bg-card);
+    border-left: 1px solid var(--gst-color-border);
+    box-shadow: -4px 0 12px rgba(0, 0, 0, 0.15);
+    display: flex;
+    flex-direction: column;
+    z-index: 1000;
+}
+
+.gst-ai-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--gst-spacing-md);
+    background-color: #7b2cbf;
+    color: white;
+}
+
+.gst-ai-title {
+    font-weight: 500;
+    font-size: 16px;
+}
+
+.gst-ai-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--gst-spacing-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--gst-spacing-sm);
+}
+
+.gst-chat-message {
+    max-width: 85%;
+    padding: var(--gst-spacing-sm) var(--gst-spacing-md);
+    border-radius: var(--gst-radius);
+}
+
+.gst-chat-user {
+    align-self: flex-end;
+    background-color: var(--gst-color-primary);
+    color: white;
+}
+
+.gst-chat-assistant {
+    align-self: flex-start;
+    background-color: var(--gst-color-bg);
+}
+
+.gst-chat-content {
+    white-space: pre-wrap;
+    font-size: 13px;
+}
+
+.gst-chat-loading {
+    font-style: italic;
+    color: var(--gst-color-text-muted);
+}
+
+.gst-chat-pipeline {
+    margin-top: var(--gst-spacing-sm);
+}
+
+.gst-chat-pipeline .gst-code-block {
+    font-size: 11px;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.gst-btn-use {
+    margin-top: var(--gst-spacing-xs);
+    font-size: 12px;
+    padding: var(--gst-spacing-xs) var(--gst-spacing-sm);
+}
+
+.gst-ai-input-row {
+    display: flex;
+    gap: var(--gst-spacing-sm);
+    padding: var(--gst-spacing-md);
+    border-top: 1px solid var(--gst-color-border);
+}
+
+.gst-ai-input-row textarea {
+    flex: 1;
+    resize: none;
+}
+
+.gst-ai-input-row button {
+    align-self: flex-end;
+}
