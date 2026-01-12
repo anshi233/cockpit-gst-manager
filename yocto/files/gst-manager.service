@@ -1,10 +1,13 @@
 [Unit]
 Description=GStreamer Pipeline Manager Daemon
-After=network.target cockpit.socket
+# Start very late after all core services and hardware are ready
+After=network.target cockpit.socket multi-user.target sound.target
 Wants=cockpit.socket
 
 [Service]
 Type=simple
+# Add 5 second delay to ensure hardware (encoder/VPU) is fully initialized
+ExecStartPre=/bin/sleep 5
 ExecStart=/usr/bin/python3 /usr/lib/gst-manager/main.py
 Restart=on-failure
 RestartSec=5
