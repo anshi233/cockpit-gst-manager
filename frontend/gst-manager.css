@@ -732,6 +732,62 @@ body {
     padding: var(--gst-spacing-xs) var(--gst-spacing-sm);
 }
 
+/* Markdown in chat */
+.gst-chat-content code {
+    background-color: var(--gst-color-bg);
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-family: monospace;
+    font-size: 12px;
+}
+
+.gst-chat-content h2,
+.gst-chat-content h3,
+.gst-chat-content h4 {
+    margin: var(--gst-spacing-sm) 0 var(--gst-spacing-xs);
+    font-size: 14px;
+}
+
+.gst-chat-content strong {
+    font-weight: 600;
+}
+
+.gst-chat-loading {
+    font-style: italic;
+    color: var(--gst-color-text-muted);
+}
+
+.loading-dots::after {
+    content: '';
+    animation: dots 1.5s steps(4, end) infinite;
+}
+
+@keyframes dots {
+
+    0%,
+    20% {
+        content: '';
+    }
+
+    40% {
+        content: '.';
+    }
+
+    60% {
+        content: '..';
+    }
+
+    80%,
+    100% {
+        content: '...';
+    }
+}
+
+.loading-time {
+    color: var(--gst-color-text-muted);
+    font-size: 11px;
+}
+
 .gst-ai-input-row {
     display: flex;
     gap: var(--gst-spacing-sm);
@@ -746,4 +802,125 @@ body {
 
 .gst-ai-input-row button {
     align-self: flex-end;
+}
+
+/* Modal */
+.gst-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+}
+
+.gst-modal-content {
+    background-color: var(--gst-color-bg-card);
+    border-radius: var(--gst-radius);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    max-width: 500px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.gst-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--gst-spacing-md);
+    border-bottom: 1px solid var(--gst-color-border);
+}
+
+.gst-modal-header h2 {
+    margin: 0;
+    font-size: 18px;
+}
+
+.gst-modal-body {
+    padding: var(--gst-spacing-md);
+}
+
+.gst-modal-body h3 {
+    margin-top: 0;
+    font-size: 16px;
+}
+
+.gst-modal-body h4 {
+    margin-top: var(--gst-spacing-lg);
+    margin-bottom: var(--gst-spacing-sm);
+    font-size: 14px;
+}
+
+/* Form groups */
+.gst-form-group {
+    margin-bottom: var(--gst-spacing-sm);
+}
+
+.gst-form-group label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 13px;
+    color: var(--gst-color-text);
+}
+
+.gst-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--gst-color-border);
+    border-radius: var(--gst-radius);
+    font-size: 14px;
+    background-color: var(--gst-color-bg);
+    color: var(--gst-color-text);
+}
+
+.gst-input:focus {
+    outline: none;
+    border-color: var(--gst-color-primary);
+}
+
+/* Provider list */
+.gst-providers-list {
+    margin-bottom: var(--gst-spacing-md);
+}
+
+.gst-provider-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--gst-spacing-sm);
+    border: 1px solid var(--gst-color-border);
+    border-radius: var(--gst-radius);
+    margin-bottom: var(--gst-spacing-xs);
+}
+
+.gst-provider-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.gst-btn-sm {
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+.gst-text-muted {
+    color: var(--gst-color-text-muted);
+    font-size: 12px;
+}
+
+.gst-form-actions {
+    display: flex;
+    gap: var(--gst-spacing-sm);
+    margin-top: var(--gst-spacing-md);
+}
+
+.gst-provider-actions {
+    display: flex;
+    gap: var(--gst-spacing-xs);
 }

@@ -359,12 +359,17 @@ class InstanceManager:
         instance.status = InstanceStatus.STOPPING
         await self._notify_status_change(instance_id, "stopping")
 
+        # Import signal module (add to top of file if missing, but we can access via signal.SIGINT)
+        import signal
+
         process = self.processes.get(instance_id)
         if process:
             try:
-                process.terminate()
+                # Use SIGINT (CTRL+C) to allow gst-launch to handle EOS and cleanup drivers
+                process.send_signal(signal.SIGINT)
                 try:
-                    await asyncio.wait_for(process.wait(), timeout=5.0)
+                    # Give it 10 seconds to shutdown cleanly (hardware encoders can be slow)
+                    await asyncio.wait_for(process.wait(), timeout=10.0)
                 except asyncio.TimeoutError:
                     logger.warning(f"Force killing instance: {instance_id}")
                     process.kill()

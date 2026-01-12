@@ -173,37 +173,21 @@ class ToolHandler:
         encoder = args.get("encoder", "all")
 
         encoders = {
-            "aml_h264enc": {
-                "codec": "H.264",
+            "amlvenc": {
+                "codec": "H.264/H.265",
                 "max_resolution": "4096x2160",
-                "max_bitrate": 100000000,
+                "max_bitrate": 0,  # No practical limit
                 "properties": {
-                    "bitrate": {"type": "int", "min": 1000000, "max": 100000000,
+                    "bitrate": {"type": "int", "min": 0, "max": 200000000,
                                "default": 10000000},
-                    "profile": {"type": "enum", "values": ["baseline", "main", "high"],
-                               "default": "high"},
                     "gop": {"type": "int", "min": 1, "max": 300, "default": 30},
-                    "bframes": {"type": "int", "min": 0, "max": 3, "default": 0}
-                }
-            },
-            "aml_h265enc": {
-                "codec": "H.265/HEVC",
-                "max_resolution": "4096x2160",
-                "max_bitrate": 80000000,
-                "properties": {
-                    "bitrate": {"type": "int", "min": 1000000, "max": 80000000,
-                               "default": 8000000},
-                    "profile": {"type": "enum", "values": ["main", "main10"],
-                               "default": "main"},
-                    "gop": {"type": "int", "min": 1, "max": 300, "default": 30}
+                    "framerate": {"type": "int", "min": 0, "max": 120, "default": 30}
                 }
             }
         }
 
-        if encoder == "h264":
-            return {"aml_h264enc": encoders["aml_h264enc"]}
-        elif encoder == "h265":
-            return {"aml_h265enc": encoders["aml_h265enc"]}
+        if encoder == "h264" or encoder == "h265":
+            return encoders  # Return amlvenc for both queries
         return encoders
 
     async def _tool_get_gst_element_info(self, args: Dict) -> Dict:

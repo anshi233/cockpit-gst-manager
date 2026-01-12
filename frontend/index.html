@@ -19,6 +19,9 @@
         <header class="gst-header">
             <h1 class="gst-title">GStreamer Manager</h1>
             <div class="gst-header-actions">
+                <button id="btn-settings" class="gst-btn gst-btn-secondary" title="Settings">
+                    Settings
+                </button>
                 <button id="btn-ai-toggle" class="gst-btn gst-btn-accent" title="AI Assistant">
                     AI Assistant
                 </button>
@@ -159,7 +162,7 @@
         <aside id="ai-chat-panel" class="gst-ai-panel" style="display: none;">
             <div class="gst-ai-header">
                 <span class="gst-ai-title">AI Pipeline Assistant</span>
-                <button id="btn-ai-close" class="gst-btn-icon" onclick="AiChat.toggle()">X</button>
+                <button id="btn-ai-close" class="gst-btn-icon">X</button>
             </div>
             <div id="ai-messages" class="gst-ai-messages"></div>
             <div class="gst-ai-input-row">
@@ -168,6 +171,44 @@
                 <button id="btn-ai-send" class="gst-btn gst-btn-primary">Send</button>
             </div>
         </aside>
+
+        <!-- Settings Modal -->
+        <div id="settings-modal" class="gst-modal" style="display: none;">
+            <div class="gst-modal-content">
+                <div class="gst-modal-header">
+                    <h2>Settings</h2>
+                    <button id="btn-close-settings" class="gst-btn-icon">X</button>
+                </div>
+                <div class="gst-modal-body">
+                    <h3>AI Provider Configuration</h3>
+                    <div id="ai-providers-list" class="gst-providers-list"></div>
+
+                    <h4>Add New Provider</h4>
+                    <div class="gst-form-group">
+                        <label for="provider-name">Name:</label>
+                        <input type="text" id="provider-name" class="gst-input" placeholder="e.g., GLM">
+                    </div>
+                    <div class="gst-form-group">
+                        <label for="provider-url">API URL:</label>
+                        <input type="text" id="provider-url" class="gst-input"
+                            placeholder="https://api.example.com/v1/chat/completions">
+                    </div>
+                    <div class="gst-form-group">
+                        <label for="provider-model">Model:</label>
+                        <input type="text" id="provider-model" class="gst-input" placeholder="e.g., glm-4">
+                    </div>
+                    <div class="gst-form-group">
+                        <label for="provider-key">API Key:</label>
+                        <input type="password" id="provider-key" class="gst-input" placeholder="Your API key">
+                    </div>
+                    <div class="gst-form-actions">
+                        <button id="btn-add-provider" class="gst-btn gst-btn-primary">Add Provider</button>
+                        <button id="btn-cancel-provider" class="gst-btn gst-btn-secondary"
+                            style="display: none;">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Application scripts -->

@@ -6,13 +6,14 @@ Implements the org.cockpit.GstManager1 interface.
 import asyncio
 import json
 import logging
+from pathlib import Path
 from typing import Dict, Any, List
 
 # Try to import dbus-next (preferred) or fallback to dbus-python
 try:
     from dbus_next.aio import MessageBus
     from dbus_next.service import ServiceInterface, method, signal, dbus_property
-    from dbus_next import Variant, DBusError
+    from dbus_next import Variant, DBusError, BusType
     DBUS_LIBRARY = "dbus_next"
 except ImportError:
     # Fallback to dbus-python
@@ -74,6 +75,22 @@ if DBUS_LIBRARY == "dbus_next":
 
             # Register for status change callbacks
             self.instance_manager.add_status_callback(self._on_status_change)
+
+        async def _save_config(self) -> None:
+            """Save config to disk."""
+            config_path = Path("/var/lib/gst-manager/config.json")
+            try:
+                import aiofiles
+                async with aiofiles.open(config_path, "w") as f:
+                    await f.write(json.dumps(self.config, indent=2))
+                logger.debug(f"Saved config to {config_path}")
+            except ImportError:
+                # Fallback to sync write
+                with open(config_path, "w") as f:
+                    json.dump(self.config, f, indent=2)
+                logger.debug(f"Saved config to {config_path} (sync)")
+            except Exception as e:
+                logger.error(f"Failed to save config: {e}")
 
         async def _on_status_change(self, instance_id: str, status: str) -> None:
             """Callback for instance status changes."""
@@ -276,22 +293,46 @@ if DBUS_LIBRARY == "dbus_next":
             api_key: "s",
             model: "s"
         ) -> "b":
-            """Add a new AI provider."""
+            """Add or update an AI provider."""
             try:
-                # Add to config
                 providers = self.config.setdefault("ai_providers", [])
-                providers.append({
+                
+                # Check if provider exists (update case)
+                existing_idx = None
+                for i, p in enumerate(providers):
+                    if p.get("name") == name:
+                        existing_idx = i
+                        break
+                
+                # Handle __KEEP__ marker for preserving existing key
+                actual_key = api_key
+                if api_key == "__KEEP__" and existing_idx is not None:
+                    actual_key = providers[existing_idx].get("api_key", "")
+                
+                new_provider = {
                     "name": name,
                     "url": url,
-                    "api_key": api_key,
+                    "api_key": actual_key,
                     "model": model
-                })
+                }
+                
+                if existing_idx is not None:
+                    # Replace existing
+                    providers[existing_idx] = new_provider
+                    logger.info(f"Updated AI provider: {name}")
+                else:
+                    # Add new
+                    providers.append(new_provider)
+                    logger.info(f"Added AI provider: {name}")
+                
+                # Save config to disk
+                await self._save_config()
                 
                 # Reload AI agent if exists
                 if self.ai_agent:
-                    self.ai_agent.provider_manager.add_provider(name, url, api_key, model)
+                    self.ai_agent.provider_manager.remove_provider(name)
+                    self.ai_agent.provider_manager.add_provider(name, url, actual_key, model)
                 
-                logger.info(f"Added AI provider: {name}")
                 return True
             except Exception as e:
                 logger.error(f"AddAiProvider failed: {e}")
@@ -303,6 +344,9 @@ if DBUS_LIBRARY == "dbus_next":
             try:
                 providers = self.config.get("ai_providers", [])
                 self.config["ai_providers"] = [p for p in providers if p.get("name") != name]
+                
+                # Save config to disk
+                await self._save_config()
                 
                 if self.ai_agent:
                     self.ai_agent.provider_manager.remove_provider(name)
@@ -374,7 +418,7 @@ if DBUS_LIBRARY == "dbus_next":
 
         async def start(self) -> None:
             """Start the D-Bus service."""
-            self.bus = await MessageBus(bus_type=1).connect()  # 1 = SYSTEM bus
+            self.bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
 
             self.interface = GstManagerInterface(
                 self.instance_manager,

@@ -16,6 +16,8 @@ const state = {
     hdmiStatus: null,
     selectedInstance: null,
     editingInstance: null,
+    aiProviders: [],
+    editingProvider: null,
     dbus: null
 };
 
@@ -48,6 +50,7 @@ function setupEventHandlers() {
     // Header buttons
     document.getElementById("btn-refresh").addEventListener("click", refreshAll);
     document.getElementById("btn-new-instance").addEventListener("click", showNewInstanceEditor);
+    document.getElementById("btn-settings").addEventListener("click", showSettings);
 
     // Editor buttons
     document.getElementById("btn-close-editor").addEventListener("click", hideEditor);
@@ -66,6 +69,11 @@ function setupEventHandlers() {
     // Autostart toggle
     document.getElementById("detail-autostart").addEventListener("change", onAutostartChanged);
     document.getElementById("detail-trigger").addEventListener("change", onTriggerChanged);
+
+    // Settings modal
+    document.getElementById("btn-close-settings").addEventListener("click", hideSettings);
+    document.getElementById("btn-add-provider").addEventListener("click", addAiProvider);
+    document.getElementById("btn-cancel-provider").addEventListener("click", cancelEditProvider);
 }
 
 function subscribeToSignals() {
@@ -577,4 +585,161 @@ function formatUptime(seconds) {
     const hours = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
     return `${hours}h ${mins}m`;
+}
+
+// Settings functions
+
+async function showSettings() {
+    document.getElementById("settings-modal").style.display = "flex";
+    await loadAiProviders();
+}
+
+function hideSettings() {
+    document.getElementById("settings-modal").style.display = "none";
+}
+
+async function loadAiProviders() {
+    try {
+        const result = await callMethod("GetAiProviders");
+        const providers = JSON.parse(result);
+        renderProvidersList(providers);
+    } catch (error) {
+        console.error("Failed to load providers:", error);
+    }
+}
+
+function renderProvidersList(providers) {
+    const container = document.getElementById("ai-providers-list");
+
+    // Store providers for editing
+    state.aiProviders = providers;
+
+    if (!providers || providers.length === 0) {
+        container.innerHTML = '<p class="gst-text-muted">No AI providers configured.</p>';
+        return;
+    }
+
+    let html = '';
+    for (const p of providers) {
+        const keyStatus = p.has_key ? 'Key set' : 'No key';
+        html += `
+            <div class="gst-provider-item">
+                <div class="gst-provider-info">
+                    <strong>${escapeHtml(p.name)}</strong>
+                    <span class="gst-text-muted">${escapeHtml(p.model || '')} - ${keyStatus}</span>
+                </div>
+                <div class="gst-provider-actions">
+                    <button class="gst-btn gst-btn-secondary gst-btn-sm btn-edit-provider" 
+                            data-name="${escapeHtml(p.name)}">Edit</button>
+                    <button class="gst-btn gst-btn-danger gst-btn-sm btn-remove-provider" 
+                            data-name="${escapeHtml(p.name)}">Remove</button>
+                </div>
+            </div>
+        `;
+    }
+    container.innerHTML = html;
+
+    // Add event listeners (CSP-compliant)
+    container.querySelectorAll('.btn-edit-provider').forEach(btn => {
+        btn.addEventListener('click', () => editAiProvider(btn.dataset.name));
+    });
+    container.querySelectorAll('.btn-remove-provider').forEach(btn => {
+        btn.addEventListener('click', () => removeAiProvider(btn.dataset.name));
+    });
+}
+
+async function addAiProvider() {
+    const name = document.getElementById("provider-name").value.trim();
+    const url = document.getElementById("provider-url").value.trim();
+    const model = document.getElementById("provider-model").value.trim();
+    const key = document.getElementById("provider-key").value.trim();
+    const isEditing = !!state.editingProvider;
+
+    // For new providers, all fields required. For editing, key is optional
+    if (!name || !url || !model) {
+        showToast("Name, URL, and Model are required", "error");
+        return;
+    }
+
+    if (!isEditing && !key) {
+        showToast("API Key is required for new providers", "error");
+        return;
+    }
+
+    try {
+        // If editing and name changed, remove old provider first
+        if (isEditing && state.editingProvider !== name) {
+            await callMethod("RemoveAiProvider", state.editingProvider);
+        }
+
+        // Use __KEEP__ marker if editing without new key
+        const actualKey = key || (isEditing ? "__KEEP__" : "");
+
+        const success = await callMethod("AddAiProvider", name, url, actualKey, model);
+        if (success) {
+            showToast(isEditing ? "Provider updated" : "Provider added", "success");
+            cancelEditProvider(); // Clear form and reset state
+            await loadAiProviders();
+        } else {
+            showToast("Failed to save provider", "error");
+        }
+    } catch (error) {
+        console.error("Failed to save provider:", error);
+        showToast("Failed to save provider", "error");
+    }
+}
+
+async function removeAiProvider(name) {
+    if (!confirm(`Remove AI provider "${name}"?`)) {
+        return;
+    }
+
+    try {
+        const success = await callMethod("RemoveAiProvider", name);
+        if (success) {
+            showToast("Provider removed", "success");
+            await loadAiProviders();
+        } else {
+            showToast("Failed to remove provider", "error");
+        }
+    } catch (error) {
+        console.error("Failed to remove provider:", error);
+        showToast("Failed to remove provider", "error");
+    }
+}
+
+function editAiProvider(name) {
+    // Find provider in stored list
+    const provider = (state.aiProviders || []).find(p => p.name === name);
+    if (!provider) {
+        showToast("Provider not found", "error");
+        return;
+    }
+
+    // Populate form
+    document.getElementById("provider-name").value = provider.name || "";
+    document.getElementById("provider-url").value = provider.url || "";
+    document.getElementById("provider-model").value = provider.model || "";
+    document.getElementById("provider-key").value = ""; // Don't show existing key
+    document.getElementById("provider-key").placeholder = "Enter new key (leave blank to keep current)";
+
+    // Mark as editing
+    state.editingProvider = name;
+
+    // Change button text and show cancel
+    document.getElementById("btn-add-provider").textContent = "Update Provider";
+    document.getElementById("btn-cancel-provider").style.display = "inline-block";
+
+    showToast("Edit provider details and click Update", "info");
+}
+
+function cancelEditProvider() {
+    state.editingProvider = null;
+    document.getElementById("provider-name").value = "";
+    document.getElementById("provider-url").value = "";
+    document.getElementById("provider-model").value = "";
+    document.getElementById("provider-key").value = "";
+    document.getElementById("provider-key").placeholder = "Your API key";
+    document.getElementById("btn-add-provider").textContent = "Add Provider";
+    document.getElementById("btn-cancel-provider").style.display = "none";
 }

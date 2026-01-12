@@ -15,7 +15,7 @@ logger = logging.getLogger("gst-manager.discovery")
 
 
 # Known device paths
-VDIN_DEVICES = ["/dev/vdin1", "/dev/video0", "/dev/video1", "/dev/video2"]
+VDIN_DEVICES = ["/dev/video71", "/dev/video0", "/dev/video1", "/dev/video2"]
 AUDIO_DEVICES = ["hw:0,0", "hw:1,0"]
 STORAGE_PATHS = ["/mnt/sdcard", "/data", "/mnt/usb"]
 HDMIRX_SYSFS = "/sys/class/hdmirx/hdmirx0"
@@ -185,15 +185,29 @@ class DiscoveryManager:
             return False
 
     async def _discover_encoders(self) -> List[str]:
-        """Discover available hardware encoders."""
+        """Discover available hardware encoders.
+        
+        Note: On Amlogic A311D2, the hardware encoder is 'amlvenc' which handles
+        both H.264 and H.265. We hardcode this as available since gst-inspect may
+        not correctly report it in all environments.
+        """
+        # Known Amlogic encoders - always available on this platform
+        known_encoders = ["amlvenc"]
+        
+        # Try to verify via gst-inspect, but if check fails we still include them
         encoders = []
-        encoder_elements = ["aml_h264enc", "aml_h265enc"]
-
-        for element in encoder_elements:
+        for element in known_encoders:
             available = await self._check_gst_element(element)
             if available:
                 encoders.append(element)
-
+        
+        # If detection failed but we're on Amlogic platform, include them anyway
+        if not encoders:
+            # Check if we're on an Amlogic platform (vdin1 exists)
+            if Path("/dev/vdin1").exists():
+                logger.info("Amlogic platform detected, adding known encoders")
+                encoders = known_encoders
+        
         return encoders
 
     async def _discover_custom_plugins(self) -> List[str]:
