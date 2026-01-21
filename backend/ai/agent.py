@@ -50,13 +50,15 @@ If the user asks anything unrelated to GStreamer pipelines, respond:
 
 ### HDMI Audio (HDMI RX loopback)
 - Device: hw:0,6 (HDMI RX loopback)
-- Source: alsasrc device=hw:0,6 buffer-time=100000 do-timestamp=true
+- Source: alsasrc device=hw:0,6 buffer-time=200000 provide-clock=false slave-method=re-timestamp
 - Use when capturing audio from HDMI source
+- IMPORTANT: provide-clock=false and slave-method=re-timestamp are REQUIRED to avoid A/V sync issues at high frame rates
 
 ### Line In Audio
 - Device: hw:0,0 (Line In)
-- Source: alsasrc device=hw:0,0 buffer-time=100000 do-timestamp=true
+- Source: alsasrc device=hw:0,0 buffer-time=200000 provide-clock=false slave-method=re-timestamp
 - Use when capturing audio from external line-in source
+- IMPORTANT: provide-clock=false and slave-method=re-timestamp are REQUIRED to avoid A/V sync issues at high frame rates
 
 ## COMPLETE PIPELINE TEMPLATES (USE THESE EXACTLY)
 
@@ -74,7 +76,7 @@ gst-launch-1.0 -e -v \\
   amlvenc bitrate=30000 framerate=60 gop=60 ! video/x-h265 ! h265parse config-interval=-1 ! \\
   queue max-size-buffers=30 max-size-time=0 max-size-bytes=0 ! \\
   mux. \\
-  alsasrc device=hw:0,6 buffer-time=100000 ! \\
+  alsasrc device=hw:0,6 buffer-time=200000 provide-clock=false slave-method=re-timestamp ! \\
   audio/x-raw,rate=48000,channels=2,format=S16LE ! \\
   queue max-size-buffers=0 max-size-time=500000000 max-size-bytes=0 ! \\
   audioconvert ! audioresample ! \\
@@ -99,7 +101,7 @@ gst-launch-1.0 -e -v \\
   amlvenc bitrate=30000 framerate=60 gop=60 ! video/x-h265 ! h265parse ! \\
   queue max-size-buffers=30 max-size-time=0 max-size-bytes=0 ! \\
   matroskamux name=mux ! filesink location=test71.mkv \\
-  alsasrc device=hw:0,6 buffer-time=100000 ! \\
+  alsasrc device=hw:0,6 buffer-time=200000 provide-clock=false slave-method=re-timestamp ! \\
   audio/x-raw,rate=48000,channels=2,format=S16LE ! \\
   queue max-size-buffers=0 max-size-time=500000000 max-size-bytes=0 ! \\
   audioconvert ! audioresample ! \\
