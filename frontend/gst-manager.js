@@ -73,6 +73,27 @@ function setupEventHandlers() {
     document.getElementById("btn-close-settings").addEventListener("click", hideSettings);
     document.getElementById("btn-add-provider").addEventListener("click", addAiProvider);
     document.getElementById("btn-cancel-provider").addEventListener("click", cancelEditProvider);
+    
+    // Tab switching
+    document.querySelectorAll('.gst-tab-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const tab = e.target.dataset.tab;
+            switchTab(tab);
+        });
+    });
+}
+
+function switchTab(tab) {
+    // Update button states
+    document.querySelectorAll('.gst-tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tab);
+    });
+    
+    // Update content visibility
+    document.querySelectorAll('.gst-tab-content').forEach(content => {
+        content.classList.toggle('active', content.id === `tab-${tab}`);
+        content.style.display = content.id === `tab-${tab}` ? 'block' : 'none';
+    });
 }
 
 function subscribeToSignals() {
@@ -184,28 +205,42 @@ async function callMethod(method, ...args) {
 // Rendering functions
 
 function renderInstancesList() {
-    const container = document.getElementById("instances-list");
+    // Get active tab
+    const activeTab = document.querySelector('.gst-tab-btn.active')?.dataset.tab || 'auto';
+    
+    // Filter instances by type
+    const autoInstances = state.instances.filter(i => i.instance_type === 'auto');
+    const customInstances = state.instances.filter(i => i.instance_type !== 'auto');
+    
+    // Render based on active tab
+    if (activeTab === 'auto') {
+        // Auto instances are managed via the auto configurator panel
+        // We don't render them in a list here
+    } else {
+        // Render custom instances
+        const container = document.getElementById("instances-list");
+        
+        if (customInstances.length === 0) {
+            container.innerHTML = '<p class="gst-empty-state">No custom instances configured</p>';
+            return;
+        }
 
-    if (state.instances.length === 0) {
-        container.innerHTML = '<p class="gst-empty-state">No instances configured</p>';
-        return;
-    }
-
-    container.innerHTML = state.instances.map(instance => `
-        <div class="gst-instance-card ${state.selectedInstance?.id === instance.id ? "selected" : ""}" 
-             data-id="${instance.id}">
-            <div class="gst-instance-header">
-                <span class="gst-instance-name">${escapeHtml(instance.name)}</span>
-                <span class="gst-status-badge gst-status-${instance.status}">${instance.status}</span>
+        container.innerHTML = customInstances.map(instance => `
+            <div class="gst-instance-card ${state.selectedInstance?.id === instance.id ? "selected" : ""}" 
+                 data-id="${instance.id}">
+                <div class="gst-instance-header">
+                    <span class="gst-instance-name">${escapeHtml(instance.name)}</span>
+                    <span class="gst-status-badge gst-status-${instance.status}">${instance.status}</span>
+                </div>
+                <div class="gst-instance-pipeline">${escapeHtml(truncate(instance.pipeline, 80))}</div>
             </div>
-            <div class="gst-instance-pipeline">${escapeHtml(truncate(instance.pipeline, 80))}</div>
-        </div>
-    `).join("");
+        `).join("");
 
-    // Add click handlers
-    container.querySelectorAll(".gst-instance-card").forEach(card => {
-        card.addEventListener("click", () => selectInstance(card.dataset.id));
-    });
+        // Add click handlers
+        container.querySelectorAll(".gst-instance-card").forEach(card => {
+            card.addEventListener("click", () => selectInstance(card.dataset.id));
+        });
+    }
 }
 
 function renderBoardContext() {
@@ -277,13 +312,59 @@ function updateDetailView() {
     document.getElementById("detail-status").className = `gst-status-badge gst-status-${inst.status}`;
     document.getElementById("detail-pid").textContent = inst.pid || "-";
     document.getElementById("detail-error").textContent = inst.error_message || "-";
-    document.getElementById("detail-pipeline").textContent = inst.pipeline;
+    
+    // For auto instances, show config summary; for custom, show pipeline
+    if (inst.instance_type === 'auto' && inst.auto_config) {
+        const cfg = inst.auto_config;
+        document.getElementById("detail-pipeline").innerHTML = `
+            <div class="gst-auto-config-summary">
+                <div class="gst-config-row">
+                    <span class="gst-label">Type:</span>
+                    <span>Auto-Generated</span>
+                </div>
+                <div class="gst-config-row">
+                    <span class="gst-label">Encoder:</span>
+                    <span>H.265 (amlvenc)</span>
+                </div>
+                <div class="gst-config-row">
+                    <span class="gst-label">Bitrate:</span>
+                    <span>${(cfg.bitrate_kbps / 1000).toFixed(1)} Mbps</span>
+                </div>
+                <div class="gst-config-row">
+                    <span class="gst-label">GOP Interval:</span>
+                    <span>${cfg.gop_interval_seconds}s</span>
+                </div>
+                <div class="gst-config-row">
+                    <span class="gst-label">RC Mode:</span>
+                    <span>${cfg.rc_mode === 1 ? 'CBR' : cfg.rc_mode === 0 ? 'VBR' : 'FixQP'}</span>
+                </div>
+                <div class="gst-config-row">
+                    <span class="gst-label">Audio:</span>
+                    <span>${cfg.audio_source === 'hdmi_rx' ? 'HDMI RX' : 'Line In'}</span>
+                </div>
+                <div class="gst-config-row">
+                    <span class="gst-label">SRT Port:</span>
+                    <span>${cfg.srt_port}</span>
+                </div>
+                ${cfg.recording_enabled ? `
+                <div class="gst-config-row">
+                    <span class="gst-label">Recording:</span>
+                    <span>${cfg.recording_path}</span>
+                </div>
+                ` : ''}
+                <hr style="margin: 10px 0; border: none; border-top: 1px solid #ddd;">
+                <pre style="font-size: 11px; white-space: pre-wrap; word-break: break-all;">${escapeHtml(inst.pipeline)}</pre>
+            </div>
+        `;
+    } else {
+        document.getElementById("detail-pipeline").textContent = inst.pipeline;
+    }
 
     // Update button states
     const isRunning = inst.status === "running";
     document.getElementById("btn-start-instance").disabled = isRunning;
     document.getElementById("btn-stop-instance").disabled = !isRunning;
-    document.getElementById("btn-edit-instance").disabled = isRunning;
+    document.getElementById("btn-edit-instance").disabled = isRunning || inst.instance_type === 'auto';
     document.getElementById("btn-delete-instance").disabled = isRunning;
 
     // Fetch uptime

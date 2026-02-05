@@ -60,11 +60,122 @@
 
             <!-- Main content: Instance list and editor -->
             <div class="gst-content">
-                <!-- Instances list -->
+                <!-- Tabbed interface -->
                 <section class="gst-panel gst-instances-panel">
-                    <h2 class="gst-panel-title">Pipeline Instances</h2>
-                    <div id="instances-list" class="gst-instances-list">
-                        <p class="gst-empty-state">No instances configured</p>
+                    <div class="gst-tabs">
+                        <button class="gst-tab-btn active" data-tab="auto">
+                            Auto HDMI Capture
+                        </button>
+                        <button class="gst-tab-btn" data-tab="custom">
+                            Custom Instances
+                        </button>
+                    </div>
+                    
+                    <!-- Auto Configurator Tab -->
+                    <div id="tab-auto" class="gst-tab-content active">
+                        <!-- HDMI Status Bar -->
+                        <div class="gst-hdmi-status-bar">
+                            <div class="gst-hdmi-indicator-row">
+                                <span class="gst-hdmi-dot" id="auto-hdmi-rx-dot"></span>
+                                <span>HDMI RX: <span id="auto-hdmi-rx-text">Unknown</span></span>
+                            </div>
+                            <div class="gst-hdmi-indicator-row">
+                                <span class="gst-hdmi-dot" id="auto-hdmi-tx-dot"></span>
+                                <span>HDMI TX: <span id="auto-hdmi-tx-text">Unknown</span></span>
+                            </div>
+                            <div class="gst-hdmi-indicator-row">
+                                <span class="gst-hdmi-dot" id="auto-passthrough-dot"></span>
+                                <span>Passthrough: <span id="auto-passthrough-text">Unknown</span></span>
+                            </div>
+                            <div class="gst-detected-resolution" id="auto-detected-res">
+                                Detected: -
+                            </div>
+                        </div>
+                        
+                        <!-- Configuration Form -->
+                        <div class="gst-auto-config-form">
+                            <h3>Video Settings</h3>
+                            
+                            <div class="gst-form-row">
+                                <div class="gst-form-group">
+                                    <label for="auto-gop-interval">GOP Interval (seconds)</label>
+                                    <input type="number" id="auto-gop-interval" class="gst-input" 
+                                           value="1.0" min="0.5" max="10" step="0.5">
+                                </div>
+                                <div class="gst-form-group">
+                                    <label for="auto-bitrate">Bitrate (kbps)</label>
+                                    <input type="number" id="auto-bitrate" class="gst-input" 
+                                           value="20000" min="1000" max="100000" step="1000">
+                                </div>
+                            </div>
+                            
+                            <div class="gst-form-row">
+                                <div class="gst-form-group">
+                                    <label for="auto-rc-mode">RC Mode</label>
+                                    <select id="auto-rc-mode" class="gst-select">
+                                        <option value="1" selected>CBR</option>
+                                        <option value="0">VBR</option>
+                                        <option value="2">Fix QP</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <h3>Audio Settings</h3>
+                            <div class="gst-form-group">
+                                <label for="auto-audio-source">Audio Source</label>
+                                <select id="auto-audio-source" class="gst-select">
+                                    <option value="hdmi_rx" selected>HDMI RX (hw:0,6)</option>
+                                    <option value="line_in">Line In (hw:0,0)</option>
+                                </select>
+                            </div>
+                            
+                            <h3>Streaming (SRT)</h3>
+                            <div class="gst-form-group">
+                                <label for="auto-srt-port">SRT Port</label>
+                                <input type="number" id="auto-srt-port" class="gst-input" 
+                                       value="8888" min="1024" max="65535">
+                                <span class="gst-hint">Stream URL: srt://THIS_IP:PORT</span>
+                            </div>
+                            
+                            <h3>Recording (MPEG-TS)</h3>
+                            <label class="gst-toggle-label">
+                                <input type="checkbox" id="auto-recording-enabled">
+                                <span class="gst-toggle-slider"></span>
+                                Enable Recording
+                            </label>
+                            <div id="auto-recording-path-group" class="gst-form-group" style="display: none;">
+                                <label for="auto-recording-path">Recording Path</label>
+                                <input type="text" id="auto-recording-path" class="gst-input" 
+                                       placeholder="/mnt/sdcard/recordings/capture.ts">
+                            </div>
+                            
+                            <h3>Auto-Start</h3>
+                            <label class="gst-toggle-label">
+                                <input type="checkbox" id="auto-autostart" checked>
+                                <span class="gst-toggle-slider"></span>
+                                Start automatically when HDMI passthrough is ready
+                            </label>
+                        </div>
+                        
+                        <!-- Pipeline Preview -->
+                        <div class="gst-pipeline-preview-section">
+                            <h3>Generated Pipeline</h3>
+                            <pre id="auto-pipeline-preview" class="gst-code-block"></pre>
+                        </div>
+                        
+                        <!-- Actions -->
+                        <div class="gst-form-actions">
+                            <button id="btn-preview-auto" class="gst-btn gst-btn-secondary">Preview</button>
+                            <button id="btn-save-auto" class="gst-btn gst-btn-primary">Save Configuration</button>
+                            <button id="btn-delete-auto" class="gst-btn gst-btn-danger" style="display: none;">Delete</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Custom Instances Tab -->
+                    <div id="tab-custom" class="gst-tab-content" style="display: none;">
+                        <div id="instances-list" class="gst-instances-list">
+                            <p class="gst-empty-state">No instances configured</p>
+                        </div>
                     </div>
                 </section>
 
@@ -213,6 +324,7 @@
     <!-- Application scripts -->
     <script src="pipeline-editor.js"></script>
     <script src="ai-chat.js"></script>
+    <script src="auto-configurator.js"></script>
     <script src="gst-manager.js"></script>
 </body>
 

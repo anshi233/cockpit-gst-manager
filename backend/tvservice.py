@@ -8,6 +8,7 @@ import asyncio
 import ctypes
 import logging
 import os
+import re
 from ctypes import c_int, c_char_p, c_void_p, c_size_t, POINTER, Structure, CFUNCTYPE
 from dataclasses import dataclass, field
 from enum import IntEnum
@@ -117,6 +118,42 @@ class SourceConnectInfo:
     """Source connection status."""
     source: int = TvSourceInput.SOURCE_INVALID
     connected: bool = False
+
+
+@dataclass
+class HdmiTxStatus:
+    """HDMI TX (output) status from sysfs.
+    
+    Reads from /sys/class/amhdmitx/amhdmitx0/
+    """
+    connected: bool = False
+    enabled: bool = False
+    ready: bool = False
+    passthrough: bool = False
+    width: int = 0
+    height: int = 0
+    fps: int = 0
+    timing_name: str = ""
+    
+    @property
+    def resolution(self) -> str:
+        """Get resolution string like '3840x2160p60'."""
+        if self.width == 0 or self.height == 0:
+            return ""
+        return f"{self.width}x{self.height}p{self.fps}"
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "connected": self.connected,
+            "enabled": self.enabled,
+            "ready": self.ready,
+            "passthrough": self.passthrough,
+            "width": self.width,
+            "height": self.height,
+            "fps": self.fps,
+            "resolution": self.resolution,
+            "timing_name": self.timing_name
+        }
 
 
 # ============================================================================
@@ -297,6 +334,116 @@ class TvClientLib:
         except Exception:
             return False
 
+    def get_hdmi_tx_status(self) -> HdmiTxStatus:
+        """Get HDMI TX output status from sysfs.
+        
+        Reads from /sys/class/amhdmitx/amhdmitx0/
+        
+        Returns:
+            HdmiTxStatus with current TX state
+        """
+        status = HdmiTxStatus()
+        
+        # Sysfs path for HDMI TX
+        sysfs_base = Path("/sys/class/amhdmitx/amhdmitx0")
+        
+        if not sysfs_base.exists():
+            logger.debug("HDMI TX sysfs not found at %s", sysfs_base)
+            return status
+        
+        try:
+            # Read 'ready' attribute
+            ready_path = sysfs_base / "ready"
+            if ready_path.exists():
+                ready_val = self._read_sysfs_file(ready_path)
+                status.ready = ready_val.strip() == "1"
+                status.connected = status.ready  # If ready, TX is connected
+            
+            # Read 'is_passthrough_switch' attribute
+            passthrough_path = sysfs_base / "is_passthrough_switch"
+            if passthrough_path.exists():
+                pt_val = self._read_sysfs_file(passthrough_path)
+                status.passthrough = pt_val.strip() == "1"
+            
+            # Read 'disp_mode' to get resolution info
+            disp_mode_path = sysfs_base / "disp_mode"
+            if disp_mode_path.exists():
+                disp_info = self._read_sysfs_file(disp_mode_path)
+                parsed = self._parse_disp_mode(disp_info)
+                status.width = parsed.get("width", 0)
+                status.height = parsed.get("height", 0)
+                status.fps = parsed.get("fps", 0)
+                status.timing_name = parsed.get("timing_name", "")
+                status.enabled = status.width > 0  # If we have resolution, output is enabled
+            
+            logger.debug(f"HDMI TX status: {status.to_dict()}")
+            
+        except Exception as e:
+            logger.warning(f"Failed to read HDMI TX status: {e}")
+        
+        return status
+    
+    def _read_sysfs_file(self, path: Path) -> str:
+        """Read a sysfs file safely."""
+        try:
+            with open(path, "r") as f:
+                return f.read()
+        except Exception as e:
+            logger.debug(f"Failed to read {path}: {e}")
+            return ""
+    
+    def _parse_disp_mode(self, content: str) -> Dict[str, Any]:
+        """Parse disp_mode sysfs output.
+        
+        Example content:
+            cd/cs/cr: 8/2/0
+            ...
+            name: 3840x2160p60hz
+            ...
+            h_active: 3840
+            v_active: 2160
+            h/v_freq: 135/60
+            ...
+            width/height: 3840/2160
+        """
+        result = {"width": 0, "height": 0, "fps": 0, "timing_name": ""}
+        
+        if not content:
+            return result
+        
+        try:
+            # Parse timing name (e.g., "3840x2160p60hz")
+            name_match = re.search(r'name:\s*(\S+)', content)
+            if name_match:
+                timing_name = name_match.group(1)
+                result["timing_name"] = timing_name
+                
+                # Extract width/height/fps from timing name
+                # Pattern: 3840x2160p60hz or 1920x1080i50hz
+                res_match = re.search(r'(\d+)x(\d+)([pi])(\d+)', timing_name.lower())
+                if res_match:
+                    result["width"] = int(res_match.group(1))
+                    result["height"] = int(res_match.group(2))
+                    result["fps"] = int(res_match.group(4))
+            
+            # Fallback: parse width/height directly
+            if result["width"] == 0:
+                wh_match = re.search(r'width/height:\s*(\d+)/(\d+)', content)
+                if wh_match:
+                    result["width"] = int(wh_match.group(1))
+                    result["height"] = int(wh_match.group(2))
+            
+            # Parse frequency if not already found
+            if result["fps"] == 0:
+                freq_match = re.search(r'h/v_freq:\s*\d+/(\d+)', content)
+                if freq_match:
+                    result["fps"] = int(freq_match.group(1))
+            
+        except Exception as e:
+            logger.debug(f"Failed to parse disp_mode: {e}")
+        
+        return result
+
     def set_event_callback(self, callback: Callable[[int, Any], None]):
         """Set callback for tvservice events."""
         if not self._lib:
@@ -377,6 +524,16 @@ class TvServiceMonitor:
         if self._client and self._client.available:
             return self._client.get_signal_info(self.source)
         return SignalInfo(source=self.source)
+    
+    def get_hdmi_tx_status(self) -> HdmiTxStatus:
+        """Get HDMI TX output status.
+        
+        This works even without tvservice library connection
+        by reading directly from sysfs.
+        """
+        # Create a temporary client just for TX status reading
+        client = TvClientLib()
+        return client.get_hdmi_tx_status()
 
     async def _monitor_loop(self):
         """Main monitoring loop - polls if native events aren't available."""

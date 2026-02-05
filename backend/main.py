@@ -21,6 +21,7 @@ from instances import InstanceManager
 from discovery import DiscoveryManager
 from history import HistoryManager
 from events import EventManager
+from auto_instance import AutoInstanceManager
 
 # Configuration paths
 CONFIG_DIR = Path("/var/lib/gst-manager")
@@ -89,6 +90,7 @@ class GstManagerDaemon:
         self.history_manager = HistoryManager(INSTANCES_DIR)
         self.discovery_manager = DiscoveryManager(CONFIG_DIR)
         self.instance_manager = InstanceManager(self.history_manager)
+        self.auto_instance_manager = AutoInstanceManager(self.instance_manager)
         self.event_manager = None  # Initialized after service starts
 
     async def start(self) -> None:
@@ -102,12 +104,16 @@ class GstManagerDaemon:
         # Load existing instances
         await self.instance_manager.load_instances()
 
+        # Load auto instance config
+        await self.auto_instance_manager.load()
+
         # Create and start D-Bus service
         self.service = GstManagerService(
             instance_manager=self.instance_manager,
             discovery_manager=self.discovery_manager,
             history_manager=self.history_manager,
-            config=self.config
+            config=self.config,
+            auto_instance_manager=self.auto_instance_manager
         )
         await self.service.start()
 
@@ -116,9 +122,13 @@ class GstManagerDaemon:
         # Start event monitoring (HDMI detection)
         self.event_manager = EventManager(
             instance_manager=self.instance_manager,
-            service=self.service
+            service=self.service,
+            auto_instance_manager=self.auto_instance_manager
         )
         await self.event_manager.start()
+        
+        # Set event manager reference in auto instance manager
+        self.auto_instance_manager.event_manager = self.event_manager
 
         # Connect event manager to D-Bus interface
         if self.service.interface:

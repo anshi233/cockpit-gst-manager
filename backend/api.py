@@ -63,13 +63,15 @@ if DBUS_LIBRARY == "dbus_next":
             instance_manager,
             discovery_manager,
             history_manager,
-            config: Dict
+            config: Dict,
+            auto_instance_manager=None
         ):
             super().__init__(INTERFACE_NAME)
             self.instance_manager = instance_manager
             self.discovery_manager = discovery_manager
             self.history_manager = history_manager
             self.config = config
+            self.auto_instance_manager = auto_instance_manager
             self.event_manager = None  # Set after EventManager is created
             self.ai_agent = None  # Set after AI agent is created
 
@@ -231,6 +233,147 @@ if DBUS_LIBRARY == "dbus_next":
                 logger.error(f"SetInstanceAutostart failed: {e}")
                 return False
 
+        # --- Auto Instance Methods ---
+
+        @method()
+        def GetAutoInstanceConfig(self) -> "s":
+            """Get auto instance configuration.
+            
+            Returns:
+                JSON with config or empty object if not configured.
+            """
+            if self.auto_instance_manager:
+                config = self.auto_instance_manager.get_config()
+                return json.dumps(config or {})
+            return json.dumps({})
+
+        @method()
+        async def SetAutoInstanceConfig(self, config_json: "s") -> "b":
+            """Create or update auto instance configuration.
+            
+            Only one auto instance is allowed. Creating a new one replaces
+            the existing instance.
+            
+            Args:
+                config_json: JSON with config fields:
+                    - gop_interval_seconds: float
+                    - bitrate_kbps: int
+                    - rc_mode: int (0=VBR, 1=CBR, 2=FixQP)
+                    - audio_source: str ("hdmi_rx" or "line_in")
+                    - srt_port: int
+                    - recording_enabled: bool
+                    - recording_path: str
+                    - autostart_on_ready: bool
+                    
+            Returns:
+                success: True if applied
+            """
+            try:
+                if not self.auto_instance_manager:
+                    return False
+                
+                from auto_instance import AutoInstanceConfig, AudioSource
+                
+                config_data = json.loads(config_json)
+                
+                # Create config object
+                config = AutoInstanceConfig(
+                    gop_interval_seconds=config_data.get("gop_interval_seconds", 1.0),
+                    bitrate_kbps=config_data.get("bitrate_kbps", 20000),
+                    rc_mode=config_data.get("rc_mode", 1),
+                    audio_source=AudioSource(config_data.get("audio_source", "hdmi_rx")),
+                    srt_port=config_data.get("srt_port", 8888),
+                    recording_enabled=config_data.get("recording_enabled", False),
+                    recording_path=config_data.get("recording_path", "/mnt/sdcard/recordings/capture.ts"),
+                    autostart_on_ready=config_data.get("autostart_on_ready", True)
+                )
+                
+                # Get current HDMI TX status for resolution
+                tx_status = None
+                if self.event_manager:
+                    state = self.event_manager.get_passthrough_state()
+                    if state.get("width"):
+                        # Create mock TX status for resolution
+                        class MockTxStatus:
+                            pass
+                        tx_status = MockTxStatus()
+                        tx_status.width = state.get("width", 3840)
+                        tx_status.height = state.get("height", 2160)
+                        tx_status.fps = state.get("framerate", 60)
+                        tx_status.connected = state.get("tx_connected", False)
+                        tx_status.ready = state.get("tx_ready", False)
+                        tx_status.enabled = state.get("tx_enabled", False)
+                        tx_status.passthrough = state.get("passthrough_active", False)
+                
+                await self.auto_instance_manager.create_or_update(config, tx_status)
+                return True
+                
+            except Exception as e:
+                logger.error(f"SetAutoInstanceConfig failed: {e}")
+                return False
+
+        @method()
+        def GetAutoInstancePipelinePreview(self, config_json: "s") -> "s":
+            """Get pipeline preview for given config.
+            
+            Args:
+                config_json: Configuration JSON
+                
+            Returns:
+                Pipeline string with line breaks
+            """
+            try:
+                from auto_instance import AutoInstanceConfig, PipelineBuilder, AudioSource
+                
+                config_data = json.loads(config_json)
+                config = AutoInstanceConfig(
+                    gop_interval_seconds=config_data.get("gop_interval_seconds", 1.0),
+                    bitrate_kbps=config_data.get("bitrate_kbps", 20000),
+                    rc_mode=config_data.get("rc_mode", 1),
+                    audio_source=AudioSource(config_data.get("audio_source", "hdmi_rx")),
+                    srt_port=config_data.get("srt_port", 8888),
+                    recording_enabled=config_data.get("recording_enabled", False),
+                    recording_path=config_data.get("recording_path", "/mnt/sdcard/recordings/capture.ts")
+                )
+                
+                # Use detected resolution if available
+                if self.event_manager:
+                    state = self.event_manager.get_passthrough_state()
+                    config.width = state.get("width", 3840)
+                    config.height = state.get("height", 2160)
+                    config.framerate = state.get("framerate", 60)
+                
+                builder = PipelineBuilder()
+                return builder.build_preview(config)
+                
+            except Exception as e:
+                logger.error(f"Pipeline preview failed: {e}")
+                return f"Error: {e}"
+
+        @method()
+        def GetPassthroughState(self) -> "s":
+            """Get current HDMI passthrough state.
+            
+            Returns:
+                JSON with state info including RX/TX status
+            """
+            if self.event_manager:
+                return json.dumps(self.event_manager.get_passthrough_state())
+            return json.dumps({"available": False})
+
+        @method()
+        async def DeleteAutoInstance(self) -> "b":
+            """Delete the auto instance and its configuration."""
+            if not self.auto_instance_manager:
+                return False
+            
+            try:
+                await self.auto_instance_manager.delete()
+                return True
+            except Exception as e:
+                logger.error(f"DeleteAutoInstance failed: {e}")
+                return False
+
         # --- AI Methods (Phase 4) ---
 
         @method()
@@ -379,6 +522,11 @@ if DBUS_LIBRARY == "dbus_next":
             """Emitted when HDMI input signal changes."""
             return [available, resolution]
 
+        @signal()
+        def PassthroughStateChanged(self, can_capture: "b", state_json: "s") -> "bs":
+            """Emitted when HDMI passthrough state changes."""
+            return [can_capture, state_json]
+
 
     class GstManagerService:
         """D-Bus service manager using dbus-next."""
@@ -388,12 +536,14 @@ if DBUS_LIBRARY == "dbus_next":
             instance_manager,
             discovery_manager,
             history_manager,
-            config: Dict
+            config: Dict,
+            auto_instance_manager=None
         ):
             self.instance_manager = instance_manager
             self.discovery_manager = discovery_manager
             self.history_manager = history_manager
             self.config = config
+            self.auto_instance_manager = auto_instance_manager
             self.bus = None
             self.interface = None
 
@@ -405,7 +555,8 @@ if DBUS_LIBRARY == "dbus_next":
                 self.instance_manager,
                 self.discovery_manager,
                 self.history_manager,
-                self.config
+                self.config,
+                auto_instance_manager=self.auto_instance_manager
             )
 
             self.bus.export(OBJECT_PATH, self.interface)
@@ -423,6 +574,11 @@ if DBUS_LIBRARY == "dbus_next":
             """Emit HDMI signal changed signal."""
             if self.interface:
                 self.interface.HdmiSignalChanged(available, resolution)
+
+        def emit_passthrough_state(self, can_capture: bool, state_json: str) -> None:
+            """Emit passthrough state changed signal."""
+            if self.interface:
+                self.interface.PassthroughStateChanged(can_capture, state_json)
 
 
 else:

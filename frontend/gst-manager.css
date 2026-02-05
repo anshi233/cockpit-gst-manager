@@ -924,3 +924,270 @@ body {
     display: flex;
     gap: var(--gst-spacing-xs);
 }
+
+/* ============================================================================
+   Auto Configurator Styles
+   ============================================================================ */
+
+/* Tabs */
+.gst-tabs {
+    display: flex;
+    gap: var(--gst-spacing-xs);
+    border-bottom: 1px solid var(--gst-color-border);
+    margin-bottom: var(--gst-spacing-md);
+}
+
+.gst-tab-btn {
+    padding: var(--gst-spacing-sm) var(--gst-spacing-md);
+    border: none;
+    background: transparent;
+    color: var(--gst-color-text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+}
+
+.gst-tab-btn:hover {
+    color: var(--gst-color-primary);
+}
+
+.gst-tab-btn.active {
+    color: var(--gst-color-primary);
+    border-bottom-color: var(--gst-color-primary);
+}
+
+.gst-tab-content {
+    display: none;
+}
+
+.gst-tab-content.active {
+    display: block;
+}
+
+/* HDMI Status Bar */
+.gst-hdmi-status-bar {
+    background: var(--gst-color-bg-card);
+    border: 1px solid var(--gst-color-border);
+    border-radius: var(--gst-radius);
+    padding: var(--gst-spacing-md);
+    margin-bottom: var(--gst-spacing-lg);
+}
+
+.gst-hdmi-indicator-row {
+    display: flex;
+    align-items: center;
+    gap: var(--gst-spacing-sm);
+    margin-bottom: var(--gst-spacing-sm);
+    font-size: 14px;
+}
+
+.gst-hdmi-indicator-row:last-child {
+    margin-bottom: 0;
+}
+
+.gst-hdmi-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: #ccc;
+    flex-shrink: 0;
+}
+
+.gst-hdmi-dot.connected {
+    background-color: var(--gst-color-success);
+    box-shadow: 0 0 4px var(--gst-color-success);
+}
+
+.gst-hdmi-dot.unstable {
+    background-color: var(--gst-color-warning);
+}
+
+.gst-hdmi-dot.disconnected {
+    background-color: var(--gst-color-danger);
+}
+
+.gst-hdmi-dot.active {
+    background-color: var(--gst-color-success);
+    box-shadow: 0 0 6px var(--gst-color-success);
+    animation: pulse 2s infinite;
+}
+
+.gst-hdmi-dot.inactive {
+    background-color: var(--gst-color-text-muted);
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.6; }
+    100% { opacity: 1; }
+}
+
+.gst-detected-resolution {
+    margin-top: var(--gst-spacing-sm);
+    padding-top: var(--gst-spacing-sm);
+    border-top: 1px solid var(--gst-color-border);
+    font-family: var(--gst-font-mono);
+    font-size: 13px;
+    color: var(--gst-color-text-muted);
+}
+
+/* Auto Config Form */
+.gst-auto-config-form {
+    background: var(--gst-color-bg-card);
+    border: 1px solid var(--gst-color-border);
+    border-radius: var(--gst-radius);
+    padding: var(--gst-spacing-md);
+    margin-bottom: var(--gst-spacing-lg);
+}
+
+.gst-auto-config-form h3 {
+    margin: var(--gst-spacing-lg) 0 var(--gst-spacing-sm);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--gst-color-text);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.gst-auto-config-form h3:first-child {
+    margin-top: 0;
+}
+
+.gst-form-row {
+    display: flex;
+    gap: var(--gst-spacing-md);
+    margin-bottom: var(--gst-spacing-sm);
+}
+
+.gst-form-row .gst-form-group {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+.gst-hint {
+    display: block;
+    margin-top: var(--gst-spacing-xs);
+    font-size: 12px;
+    color: var(--gst-color-text-muted);
+}
+
+/* Toggle Label */
+.gst-toggle-label {
+    display: flex;
+    align-items: center;
+    gap: var(--gst-spacing-sm);
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.gst-toggle-label input[type="checkbox"] {
+    display: none;
+}
+
+.gst-toggle-slider {
+    position: relative;
+    width: 36px;
+    height: 20px;
+    background-color: #ccc;
+    border-radius: 20px;
+    transition: 0.3s;
+    flex-shrink: 0;
+}
+
+.gst-toggle-slider:before {
+    content: "";
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background-color: white;
+    top: 2px;
+    left: 2px;
+    transition: 0.3s;
+}
+
+.gst-toggle-label input:checked + .gst-toggle-slider {
+    background-color: var(--gst-color-primary);
+}
+
+.gst-toggle-label input:checked + .gst-toggle-slider:before {
+    transform: translateX(16px);
+}
+
+/* Pipeline Preview */
+.gst-pipeline-preview-section {
+    background: var(--gst-color-bg-card);
+    border: 1px solid var(--gst-color-border);
+    border-radius: var(--gst-radius);
+    padding: var(--gst-spacing-md);
+    margin-bottom: var(--gst-spacing-lg);
+}
+
+.gst-pipeline-preview-section h3 {
+    margin: 0 0 var(--gst-spacing-sm);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+#auto-pipeline-preview {
+    max-height: 300px;
+    overflow: auto;
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+/* Instance Type Badge */
+.gst-instance-type-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-left: var(--gst-spacing-sm);
+}
+
+.gst-instance-type-badge.auto {
+    background-color: var(--gst-color-info);
+    color: white;
+}
+
+.gst-instance-type-badge.custom {
+    background-color: var(--gst-color-text-muted);
+    color: white;
+}
+
+/* Badges for auto instance */
+.gst-instance-badges {
+    display: flex;
+    gap: var(--gst-spacing-xs);
+    margin-top: var(--gst-spacing-xs);
+}
+
+.gst-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    background-color: var(--gst-color-primary);
+    color: white;
+}
+
+.gst-badge.rec {
+    background-color: var(--gst-color-danger);
+}
+
+.gst-badge.stream {
+    background-color: var(--gst-color-success);
+}
+
+.gst-badge.auto {
+    background-color: var(--gst-color-info);
+}

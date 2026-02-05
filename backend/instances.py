@@ -25,6 +25,12 @@ class InstanceStatus(Enum):
     WAITING_SIGNAL = "waiting_signal"
 
 
+class InstanceType(Enum):
+    """Type of pipeline instance."""
+    CUSTOM = "custom"  # User-created, fully editable
+    AUTO = "auto"      # Auto-generated from config, read-only
+
+
 @dataclass
 class RecoveryConfig:
     """Recovery configuration for an instance."""
@@ -40,6 +46,8 @@ class Instance:
     id: str
     name: str
     pipeline: str
+    instance_type: InstanceType = InstanceType.CUSTOM
+    auto_config: Optional[Dict[str, Any]] = None
     status: InstanceStatus = InstanceStatus.STOPPED
     pid: Optional[int] = None
     autostart: bool = False
@@ -56,6 +64,7 @@ class Instance:
         """Convert to dictionary for JSON serialization."""
         data = asdict(self)
         data["status"] = self.status.value
+        data["instance_type"] = self.instance_type.value
         return data
 
     @classmethod
@@ -67,7 +76,13 @@ class Instance:
         # Handle status enum
         if "status" in data and isinstance(data["status"], str):
             data["status"] = InstanceStatus(data["status"])
-        return cls(**data)
+        # Handle instance_type enum
+        if "instance_type" in data and isinstance(data["instance_type"], str):
+            data["instance_type"] = InstanceType(data["instance_type"])
+        # Filter out unknown fields to handle schema changes
+        valid_fields = cls.__dataclass_fields__.keys()
+        filtered_data = {k: v for k, v in data.items() if k in valid_fields}
+        return cls(**filtered_data)
 
 
 # Error patterns for transient vs fatal classification

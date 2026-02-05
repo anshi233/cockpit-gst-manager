@@ -464,27 +464,41 @@ class HdmiMonitor:
 
 
 class EventManager:
-    """Coordinates event monitoring and instance triggers."""
+    """Coordinates event monitoring and instance triggers.
+    
+    Monitors both HDMI RX (input) and TX (output) for passthrough detection.
+    When RX is stable, waits 1.5 seconds for TX stabilization, then checks
+    TX status via sysfs.
+    """
 
     def __init__(
         self,
         instance_manager,
-        service=None
+        service=None,
+        auto_instance_manager=None
     ):
         """Initialize event manager.
 
         Args:
             instance_manager: InstanceManager for triggering actions.
             service: D-Bus service for signal emission.
+            auto_instance_manager: AutoInstanceManager for auto instance control.
         """
         self.instance_manager = instance_manager
         self.service = service
+        self.auto_instance_manager = auto_instance_manager
         self.hdmi_monitor: Optional[HdmiMonitor] = None
         self.last_hdmi_status: Optional[HdmiStatus] = None
+        
+        # TX state tracking
+        self._rx_stable_time: Optional[float] = None
+        self._tx_status: Optional[Any] = None
+        self._tx_check_task: Optional[asyncio.Task] = None
+        self._last_passthrough_state: Optional[Dict[str, Any]] = None
 
     async def start(self) -> None:
         """Start all event monitors."""
-        # Start HDMI monitor
+        # Start HDMI monitor (for RX)
         self.hdmi_monitor = HdmiMonitor(
             on_status_change=self._on_hdmi_status_change,
             on_signal_ready=self._on_hdmi_signal_ready,
@@ -496,6 +510,12 @@ class EventManager:
         """Stop all event monitors."""
         if self.hdmi_monitor:
             await self.hdmi_monitor.stop()
+        if self._tx_check_task:
+            self._tx_check_task.cancel()
+            try:
+                await self._tx_check_task
+            except asyncio.CancelledError:
+                pass
 
     def get_hdmi_status(self) -> Dict[str, Any]:
         """Get current HDMI status."""
@@ -503,6 +523,33 @@ class EventManager:
             status = self.hdmi_monitor.get_status()
             return status.to_dict()
         return {"available": False}
+    
+    def get_passthrough_state(self) -> Dict[str, Any]:
+        """Get current HDMI passthrough state.
+        
+        Returns:
+            Dictionary with RX/TX status and capture readiness
+        """
+        from tvservice import HdmiTxStatus
+        
+        rx_stable = self._rx_stable_time is not None
+        tx_connected = self._tx_status is not None and self._tx_status.connected
+        tx_ready = self._tx_status is not None and self._tx_status.ready
+        
+        return {
+            "rx_connected": self.last_hdmi_status.cable_connected if self.last_hdmi_status else False,
+            "rx_stable": rx_stable,
+            "rx_signal_locked": self.last_hdmi_status.signal_locked if self.last_hdmi_status else False,
+            "tx_connected": tx_connected,
+            "tx_ready": tx_ready,
+            "tx_enabled": self._tx_status.enabled if self._tx_status else False,
+            "passthrough_active": self._tx_status.passthrough if self._tx_status else False,
+            "width": self._tx_status.width if self._tx_status else 0,
+            "height": self._tx_status.height if self._tx_status else 0,
+            "framerate": self._tx_status.fps if self._tx_status else 0,
+            "resolution": self._tx_status.resolution if self._tx_status else "",
+            "can_capture": rx_stable and tx_ready and tx_connected
+        }
 
     async def _on_hdmi_status_change(self, status: HdmiStatus) -> None:
         """Handle HDMI status change - emit D-Bus signal."""
@@ -519,25 +566,121 @@ class EventManager:
                 logger.error(f"Failed to emit HDMI signal: {e}")
 
     async def _on_hdmi_signal_ready(self, status: HdmiStatus) -> None:
-        """Handle HDMI signal becoming available - auto-start instances."""
-        logger.info(f"HDMI signal ready: {status.resolution}")
+        """Handle HDMI RX signal becoming stable.
+        
+        Schedules TX check after 1.5 second delay for TX stabilization.
+        """
+        logger.info(f"HDMI RX signal ready: {status.resolution}")
+        
+        # Mark RX as stable
+        self._rx_stable_time = time.time()
+        
+        # Cancel any pending TX check
+        if self._tx_check_task and not self._tx_check_task.done():
+            self._tx_check_task.cancel()
+        
+        # Schedule TX check after 1.5 seconds
+        self._tx_check_task = asyncio.create_task(
+            self._delayed_tx_check()
+        )
 
-        # Find instances configured for HDMI auto-start
-        for instance in self.instance_manager.instances.values():
-            if (instance.trigger_event == "hdmi_signal_ready" and
-                    instance.autostart and
-                    instance.status.value == "stopped"):
-                logger.info(f"Auto-starting instance: {instance.id}")
+    async def _delayed_tx_check(self) -> None:
+        """Wait 1.5 seconds then check TX status."""
+        try:
+            await asyncio.sleep(1.5)  # Wait for TX to stabilize
+            
+            # Check if RX is still stable
+            if self._rx_stable_time is None:
+                logger.debug("RX no longer stable, skipping TX check")
+                return
+            
+            await self._check_tx_status()
+            
+        except asyncio.CancelledError:
+            logger.debug("TX check cancelled")
+        except Exception as e:
+            logger.error(f"Error in delayed TX check: {e}")
+
+    async def _check_tx_status(self) -> None:
+        """Check HDMI TX status and update passthrough state."""
+        try:
+            # Get TX status via sysfs
+            from tvservice import TvClientLib
+            client = TvClientLib()
+            self._tx_status = client.get_hdmi_tx_status()
+            
+            logger.debug(f"HDMI TX status: {self._tx_status.to_dict()}")
+            
+            # Evaluate passthrough state
+            await self._evaluate_passthrough_state()
+            
+        except Exception as e:
+            logger.error(f"Failed to check TX status: {e}")
+
+    async def _evaluate_passthrough_state(self) -> None:
+        """Evaluate and act on passthrough state changes."""
+        current_state = self.get_passthrough_state()
+        
+        # Check if state changed
+        state_changed = (
+            self._last_passthrough_state is None or
+            self._last_passthrough_state.get("can_capture") != current_state.get("can_capture") or
+            self._last_passthrough_state.get("resolution") != current_state.get("resolution")
+        )
+        
+        if not state_changed:
+            return
+        
+        self._last_passthrough_state = current_state
+        
+        logger.info(
+            f"Passthrough state: can_capture={current_state['can_capture']}, "
+            f"resolution={current_state['resolution']}"
+        )
+        
+        # Emit D-Bus signal
+        if self.service:
+            try:
+                import json
+                self.service.emit_passthrough_state(
+                    current_state["can_capture"],
+                    json.dumps(current_state)
+                )
+            except Exception as e:
+                logger.error(f"Failed to emit passthrough state: {e}")
+        
+        # Handle state change
+        if current_state["can_capture"]:
+            # Passthrough ready - notify auto instance manager
+            if self.auto_instance_manager:
                 try:
-                    await self.instance_manager.start_instance(instance.id)
+                    await self.auto_instance_manager.on_passthrough_ready(self._tx_status)
                 except Exception as e:
-                    logger.error(f"Failed to auto-start {instance.id}: {e}")
+                    logger.error(f"Auto instance manager error: {e}")
+        else:
+            # Passthrough lost
+            if self.auto_instance_manager:
+                try:
+                    await self.auto_instance_manager.on_passthrough_lost()
+                except Exception as e:
+                    logger.error(f"Auto instance manager error: {e}")
 
     async def _on_hdmi_signal_lost(self) -> None:
-        """Handle HDMI signal lost - stop HDMI-dependent instances."""
-        logger.info("HDMI signal lost")
-
-        # Find running instances that use HDMI input
+        """Handle HDMI signal lost - stop dependent instances."""
+        logger.info("HDMI RX signal lost")
+        
+        # Mark RX as not stable
+        self._rx_stable_time = None
+        self._tx_status = None
+        
+        # Cancel any pending TX check
+        if self._tx_check_task and not self._tx_check_task.done():
+            self._tx_check_task.cancel()
+        
+        # Evaluate new state (will trigger passthrough lost)
+        await self._evaluate_passthrough_state()
+        
+        # Also handle legacy HDMI signal ready instances
         for instance in list(self.instance_manager.instances.values()):
             if (instance.status.value == "running" and
                     "/dev/vdin1" in instance.pipeline):
