@@ -1191,3 +1191,60 @@ body {
 .gst-badge.auto {
     background-color: var(--gst-color-info);
 }
+
+
+/* Auto Instance Status Display */
+.gst-auto-instance-status {
+    background: var(--gst-color-bg-card);
+    border: 1px solid var(--gst-color-border);
+    border-radius: var(--gst-radius);
+    padding: var(--gst-spacing-md);
+    margin-bottom: var(--gst-spacing-lg);
+}
+
+.gst-auto-instance-status h3 {
+    margin: 0 0 var(--gst-spacing-sm);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.gst-status-display {
+    display: flex;
+    align-items: center;
+    gap: var(--gst-spacing-sm);
+}
+
+.gst-status-text {
+    font-size: 14px;
+    color: var(--gst-color-text-muted);
+}
+
+/* Status badges for auto instance */
+.gst-status-off {
+    background-color: var(--gst-color-text-muted);
+    color: white;
+}
+
+.gst-status-running {
+    background-color: var(--gst-color-success);
+    color: white;
+    animation: pulse 2s infinite;
+}
+
+.gst-status-error {
+    background-color: var(--gst-color-danger);
+    color: white;
+}
+
+
+/* Auto Instance Actions */
+.gst-instance-actions {
+    display: flex;
+    gap: var(--gst-spacing-sm);
+    margin-top: var(--gst-spacing-sm);
+}
+
+.gst-instance-actions .gst-btn {
+    padding: var(--gst-spacing-xs) var(--gst-spacing-md);
+    font-size: 12px;
+}

@@ -104,8 +104,20 @@ class GstManagerDaemon:
         # Load existing instances
         await self.instance_manager.load_instances()
 
-        # Load auto instance config
+        # Initialize auto instance manager - always creates default config
+        # No config file needed - uses hardcoded defaults
         await self.auto_instance_manager.load()
+        
+        # Always create the auto instance at startup with default settings
+        # The pipeline will be regenerated with correct resolution when HDMI is detected
+        logger.info("Creating auto instance with default settings")
+        try:
+            await self.auto_instance_manager.create_or_update(
+                self.auto_instance_manager.config
+            )
+            logger.info(f"Auto instance ready: {self.auto_instance_manager.instance_id}")
+        except Exception as e:
+            logger.error(f"Failed to create auto instance: {e}")
 
         # Create and start D-Bus service
         self.service = GstManagerService(

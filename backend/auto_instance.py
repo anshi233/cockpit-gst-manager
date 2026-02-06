@@ -95,65 +95,55 @@ class PipelineBuilder:
         # Calculate GOP from framerate and interval
         gop = int(config.framerate * config.gop_interval_seconds)
         
-        elements = []
+        audio_device = "hw:0,6" if config.audio_source == AudioSource.HDMI_RX else "hw:0,0"
         
-        # Video source - vdin1 via /dev/video71
-        elements.append(
+        # Build pipeline
+        # Structure:
+        #   video_branch ! mux. 
+        #   audio_branch ! mux. 
+        #   mpegtsmux name=mux ... ! output
+        
+        pipeline = (
+            # Video branch ending with reference to muxer
             f'v4l2src device=/dev/video71 io-mode=dmabuf do-timestamp=true ! '
             f'video/x-raw,format=NV21,width={config.width},height={config.height},'
             f'framerate={config.framerate}/1 ! '
-            f'queue max-size-buffers=30 max-size-time=0 max-size-bytes=0'
-        )
-        
-        # Video encoder - amlvenc with H.265 output
-        elements.append(
+            f'queue max-size-buffers=30 max-size-time=0 max-size-bytes=0 ! '
             f'amlvenc gop={gop} gop-pattern=0 framerate={config.framerate} '
             f'bitrate={config.bitrate_kbps} rc-mode={config.rc_mode} ! '
-            f'video/x-h265'
-        )
-        
-        # Parser
-        elements.append('h265parse config-interval=-1')
-        
-        # Queue to muxer
-        elements.append('queue max-size-buffers=30 max-size-time=0 max-size-bytes=0')
-        elements.append('mux.')  # Link to muxer
-        
-        # Audio source
-        audio_device = "hw:0,6" if config.audio_source == AudioSource.HDMI_RX else "hw:0,0"
-        elements.append(
+            f'video/x-h265 ! '
+            f'h265parse config-interval=-1 ! '
+            f'queue max-size-buffers=30 max-size-time=0 max-size-bytes=0 ! '
+            f'mux. '  # Video goes to muxer
+            # Audio branch ending with reference to muxer  
             f'alsasrc device={audio_device} buffer-time=50000 provide-clock=false '
             f'slave-method=re-timestamp ! '
             f'audio/x-raw,rate=48000,channels=2,format=S16LE ! '
-            f'queue max-size-buffers=0 max-size-time=500000000 max-size-bytes=0'
-        )
-        
-        # Audio encoder
-        elements.append(
+            f'queue max-size-buffers=0 max-size-time=500000000 max-size-bytes=0 ! '
             f'audioconvert ! audioresample ! avenc_aac bitrate=128000 ! aacparse ! '
-            f'queue max-size-buffers=0 max-size-time=500000000 max-size-bytes=0'
+            f'queue max-size-buffers=0 max-size-time=500000000 max-size-bytes=0 ! '
+            f'mux. '  # Audio goes to muxer
+            # Muxer definition and output
+            f'mpegtsmux name=mux alignment=7 latency=100000000'
         )
-        elements.append('mux.')  # Link to muxer
         
-        # Muxer and output
+        # Output
         if config.recording_enabled:
             # Both recording and streaming - use tee
-            elements.append(
-                f'mpegtsmux name=mux alignment=7 latency=100000000 ! '
-                f'tee name=t '
+            pipeline += (
+                f' ! tee name=t '
                 f't. ! queue ! filesink location="{config.recording_path}" '
                 f't. ! queue ! srtsink uri="srt://:{config.srt_port}" '
                 f'wait-for-connection=false latency=600 sync=false'
             )
         else:
             # Streaming only
-            elements.append(
-                f'mpegtsmux name=mux alignment=7 latency=100000000 ! '
-                f'srtsink uri="srt://:{config.srt_port}" '
+            pipeline += (
+                f' ! srtsink uri="srt://:{config.srt_port}" '
                 f'wait-for-connection=false latency=600 sync=false'
             )
         
-        return ' ! '.join(elements)
+        return pipeline
     
     def build_preview(self, config: AutoInstanceConfig) -> str:
         """Build pipeline preview with line breaks for readability."""
@@ -167,9 +157,23 @@ class AutoInstanceManager:
     
     Only one auto instance is allowed per system. Creating a new one
     will replace the existing instance.
+    
+    Auto-creates with default settings on first boot if no config exists.
     """
     
     CONFIG_FILE = Path("/var/lib/gst-manager/auto_instance.json")
+    
+    # Default configuration for out-of-box experience
+    DEFAULT_CONFIG = AutoInstanceConfig(
+        gop_interval_seconds=1.0,
+        bitrate_kbps=20000,
+        rc_mode=1,  # CBR
+        audio_source=AudioSource.HDMI_RX,
+        srt_port=8888,
+        recording_enabled=False,
+        recording_path="/mnt/sdcard/recordings/capture.ts",
+        autostart_on_ready=True  # Key: auto-start when HDMI ready
+    )
     
     def __init__(self, instance_manager, event_manager=None):
         """Initialize auto instance manager.
@@ -185,36 +189,38 @@ class AutoInstanceManager:
         self._builder = PipelineBuilder()
         
     async def load(self) -> bool:
-        """Load auto instance configuration from disk.
+        """Initialize auto instance configuration.
+        
+        Always uses default settings - no config file required.
+        Settings can be updated via D-Bus and are persisted for next boot.
         
         Returns:
-            True if config was loaded successfully
+            True if config is ready
         """
-        if not self.CONFIG_FILE.exists():
-            logger.info("No auto instance config found")
-            return False
+        # Always start with default config
+        self.config = self.DEFAULT_CONFIG
         
-        try:
-            with open(self.CONFIG_FILE, "r") as f:
-                data = json.load(f)
-            
-            self.config = AutoInstanceConfig.from_dict(data.get("config", {}))
-            self.instance_id = data.get("instance_id")
-            
-            # Verify instance exists in instance manager
-            if self.instance_id:
-                instance = self.instance_manager.get_instance(self.instance_id)
-                if not instance:
-                    logger.warning(f"Auto instance {self.instance_id} not found, will recreate")
-                    self.instance_id = None
-                else:
-                    logger.info(f"Loaded auto instance: {self.instance_id}")
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to load auto instance config: {e}")
-            return False
+        # Try to load user customizations if they exist
+        if self.CONFIG_FILE.exists():
+            try:
+                with open(self.CONFIG_FILE, "r") as f:
+                    data = json.load(f)
+                
+                # Merge user settings with defaults
+                user_config = data.get("config", {})
+                if user_config:
+                    self.config = AutoInstanceConfig.from_dict(user_config)
+                    logger.info("Loaded user customizations from config file")
+                
+                # Remember instance ID if exists
+                self.instance_id = data.get("instance_id")
+                
+            except Exception as e:
+                logger.warning(f"Could not load config file, using defaults: {e}")
+        else:
+            logger.info("No config file found, using default settings")
+        
+        return True
     
     async def save(self) -> bool:
         """Save auto instance configuration to disk.
@@ -295,6 +301,10 @@ class AutoInstanceManager:
             instance.auto_config = config.to_dict()
             instance.autostart = config.autostart_on_ready
             instance.trigger_event = "hdmi_passthrough_ready"
+            logger.info(f"Marked instance {instance_id} as AUTO type, autostart={instance.autostart}")
+            
+            # Re-save to persist the instance_type change
+            await self.instance_manager.history_manager.save_instance(instance.to_dict())
         
         self.instance_id = instance_id
         await self.save()

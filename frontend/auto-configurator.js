@@ -15,6 +15,7 @@ class AutoConfigurator {
     constructor() {
         this.config = this.getDefaultConfig();
         this.hasExistingInstance = false;
+        this.autoInstanceId = null;
         this.passthroughState = null;
     }
 
@@ -31,10 +32,22 @@ class AutoConfigurator {
         };
     }
 
-    init() {
+    async init() {
         this.setupEventListeners();
         this.startStatusMonitoring();
-        this.loadConfig();
+        await this.loadConfig();
+        // Initial preview after everything is loaded
+        setTimeout(() => this.updatePreview(), 500);
+        
+        // Clean up when page unloads
+        window.addEventListener('beforeunload', () => {
+            if (this._statusPollInterval) {
+                clearInterval(this._statusPollInterval);
+            }
+            if (this._passthroughPollInterval) {
+                clearInterval(this._passthroughPollInterval);
+            }
+        });
     }
 
     setupEventListeners() {
@@ -75,10 +88,16 @@ class AutoConfigurator {
         if (saveBtn) {
             saveBtn.addEventListener('click', () => this.saveConfig());
         }
-
-        const deleteBtn = document.getElementById('btn-delete-auto');
-        if (deleteBtn) {
-            deleteBtn.addEventListener('click', () => this.deleteConfig());
+        
+        // Manual start/stop buttons
+        const startBtn = document.getElementById('btn-auto-start');
+        if (startBtn) {
+            startBtn.addEventListener('click', () => this.startInstance());
+        }
+        
+        const stopBtn = document.getElementById('btn-auto-stop');
+        if (stopBtn) {
+            stopBtn.addEventListener('click', () => this.stopInstance());
         }
     }
 
@@ -91,21 +110,166 @@ class AutoConfigurator {
         try {
             const result = await callMethod('GetAutoInstanceConfig');
             const config = JSON.parse(result);
+            console.log('Loaded auto config:', config);
             
-            if (Object.keys(config).length > 0) {
-                this.hasExistingInstance = true;
-                this.config = { ...this.getDefaultConfig(), ...config };
-                this.populateForm();
-                
-                const deleteBtn = document.getElementById('btn-delete-auto');
-                if (deleteBtn) {
-                    deleteBtn.style.display = 'inline-block';
+            // Always use the returned config (defaults + any user overrides)
+            this.config = { ...this.getDefaultConfig(), ...config };
+            this.populateForm();
+            
+            // Always start polling for instance status
+            this.hasExistingInstance = true;
+            this.startInstanceStatusPolling();
+            
+            // Try to get status immediately, with retry
+            let retries = 5;
+            while (retries > 0) {
+                await this.pollInstanceStatus();
+                if (this.autoInstanceId) {
+                    console.log('Found auto instance on first try');
+                    break;
                 }
+                console.log(`No auto instance yet, retrying... (${retries} left)`);
+                await new Promise(r => setTimeout(r, 1000));
+                retries--;
             }
             
-            this.updatePreview();
+            await this.updatePreview();
         } catch (error) {
             console.error('Failed to load auto config:', error);
+            // Use defaults on error
+            this.config = this.getDefaultConfig();
+            this.populateForm();
+            this.hasExistingInstance = true; // Still try to poll
+            this.startInstanceStatusPolling();
+            this.updateInstanceStatusDisplay('off', 'Using defaults');
+            await this.updatePreview();
+        }
+    }
+    
+    startInstanceStatusPolling() {
+        // Poll for instance status every 2 seconds
+        this._statusPollInterval = setInterval(() => this.pollInstanceStatus(), 2000);
+        // Initial poll
+        this.pollInstanceStatus();
+    }
+    
+    async pollInstanceStatus() {
+        if (!this.hasExistingInstance) return;
+        
+        try {
+            // Get all instances and find the auto one
+            const result = await callMethod('ListInstances');
+            const instances = JSON.parse(result);
+            console.log('All instances:', instances);
+            console.log('Looking for auto instance, checking types:', instances.map(i => ({id: i.id, type: i.instance_type, status: i.status})));
+            
+            const autoInstance = instances.find(i => i.instance_type === 'auto');
+            console.log('Found auto instance:', autoInstance);
+            
+            if (autoInstance) {
+                this.autoInstanceId = autoInstance.id;
+                this.updateInstanceStatusDisplay(autoInstance.status, autoInstance.error_message);
+            } else {
+                this.autoInstanceId = null;
+                this.updateInstanceStatusDisplay('off', 'Instance not found');
+            }
+        } catch (error) {
+            console.error('Failed to poll instance status:', error);
+        }
+    }
+    
+    updateInstanceStatusDisplay(status, errorMessage) {
+        const statusEl = document.getElementById('auto-instance-status');
+        const actionsEl = document.getElementById('auto-instance-actions');
+        if (!statusEl) return;
+        
+        const badgeClass = {
+            'running': 'gst-status-running',
+            'error': 'gst-status-error',
+            'stopped': 'gst-status-off',
+            'off': 'gst-status-off',
+            'starting': 'gst-status-running',
+            'stopping': 'gst-status-running'
+        }[status] || 'gst-status-off';
+        
+        const statusText = {
+            'running': 'Running',
+            'error': errorMessage || 'Error',
+            'stopped': 'Stopped (ready to start)',
+            'off': 'Not configured',
+            'starting': 'Starting...',
+            'stopping': 'Stopping...'
+        }[status] || status;
+        
+        const badgeText = {
+            'running': 'RUNNING',
+            'error': 'ERROR',
+            'stopped': 'OFF',
+            'off': 'OFF',
+            'starting': 'STARTING',
+            'stopping': 'STOPPING'
+        }[status] || status.toUpperCase();
+        
+        statusEl.innerHTML = `
+            <span class="gst-status-badge ${badgeClass}">${badgeText}</span>
+            <span class="gst-status-text">${statusText}</span>
+        `;
+        
+        // Show/hide action buttons based on state
+        if (actionsEl) {
+            if (this.hasExistingInstance) {
+                actionsEl.style.display = 'flex';
+                const startBtn = document.getElementById('btn-auto-start');
+                const stopBtn = document.getElementById('btn-auto-stop');
+                
+                if (startBtn && stopBtn) {
+                    if (status === 'running' || status === 'starting') {
+                        startBtn.disabled = true;
+                        startBtn.style.display = 'none';
+                        stopBtn.disabled = false;
+                        stopBtn.style.display = 'inline-block';
+                    } else {
+                        startBtn.disabled = false;
+                        startBtn.style.display = 'inline-block';
+                        stopBtn.disabled = true;
+                        stopBtn.style.display = 'none';
+                    }
+                }
+            } else {
+                actionsEl.style.display = 'none';
+            }
+        }
+    }
+    
+    async startInstance() {
+        if (!this.autoInstanceId) {
+            showToast('No auto instance configured', 'error');
+            return;
+        }
+        
+        try {
+            this.updateInstanceStatusDisplay('starting', 'Starting pipeline...');
+            await callMethod('StartInstance', this.autoInstanceId);
+            showToast('Pipeline started', 'success');
+        } catch (error) {
+            console.error('Failed to start instance:', error);
+            showToast('Failed to start: ' + error.message, 'error');
+        }
+    }
+    
+    async stopInstance() {
+        if (!this.autoInstanceId) {
+            showToast('No auto instance configured', 'error');
+            return;
+        }
+        
+        try {
+            this.updateInstanceStatusDisplay('stopping', 'Stopping pipeline...');
+            await callMethod('StopInstance', this.autoInstanceId);
+            showToast('Pipeline stopped', 'success');
+        } catch (error) {
+            console.error('Failed to stop instance:', error);
+            showToast('Failed to stop: ' + error.message, 'error');
         }
     }
 
@@ -164,7 +328,10 @@ class AutoConfigurator {
     async updatePreview() {
         try {
             const config = this.getFormConfig();
+            console.log('Getting pipeline preview with config:', config);
+            
             const result = await callMethod('GetAutoInstancePipelinePreview', JSON.stringify(config));
+            console.log('Pipeline preview result:', result);
             
             const previewEl = document.getElementById('auto-pipeline-preview');
             if (previewEl) {
@@ -172,6 +339,10 @@ class AutoConfigurator {
             }
         } catch (error) {
             console.error('Failed to get preview:', error);
+            const previewEl = document.getElementById('auto-pipeline-preview');
+            if (previewEl) {
+                previewEl.textContent = 'Error: ' + error.message;
+            }
         }
     }
 
@@ -182,14 +353,10 @@ class AutoConfigurator {
             
             if (success) {
                 showToast('Auto configuration saved', 'success');
-                this.hasExistingInstance = true;
                 this.config = config;
                 
-                const deleteBtn = document.getElementById('btn-delete-auto');
-                if (deleteBtn) {
-                    deleteBtn.style.display = 'inline-block';
-                }
-                
+                // Immediately poll to get updated status
+                await this.pollInstanceStatus();
                 await refreshInstances();
             } else {
                 showToast('Failed to save configuration', 'error');
@@ -200,33 +367,11 @@ class AutoConfigurator {
         }
     }
 
-    async deleteConfig() {
-        if (!confirm('Delete auto instance configuration?')) return;
-        
-        try {
-            const success = await callMethod('DeleteAutoInstance');
-            if (success) {
-                showToast('Auto configuration deleted', 'success');
-                this.hasExistingInstance = false;
-                this.config = this.getDefaultConfig();
-                this.populateForm();
-                
-                const deleteBtn = document.getElementById('btn-delete-auto');
-                if (deleteBtn) {
-                    deleteBtn.style.display = 'none';
-                }
-                
-                await refreshInstances();
-            }
-        } catch (error) {
-            console.error('Failed to delete:', error);
-            showToast('Error: ' + error.message, 'error');
-        }
-    }
+
 
     startStatusMonitoring() {
         // Poll every 2 seconds
-        setInterval(async () => {
+        this._passthroughPollInterval = setInterval(async () => {
             try {
                 const result = await callMethod('GetPassthroughState');
                 const state = JSON.parse(result);
@@ -267,25 +412,32 @@ class AutoConfigurator {
             }
         };
 
-        // HDMI RX
-        if (state.rx_connected) {
-            setDot('auto-hdmi-rx-dot', state.rx_stable ? 'connected' : 'unstable');
-            setText('auto-hdmi-rx-text', state.rx_stable ? 'Connected (Stable)' : 'Connected');
+        // HDMI RX - check if stable (not just connected)
+        if (state.rx_stable) {
+            setDot('auto-hdmi-rx-dot', 'connected');
+            setText('auto-hdmi-rx-text', 'Connected (Stable)');
+        } else if (state.rx_connected) {
+            setDot('auto-hdmi-rx-dot', 'unstable');
+            setText('auto-hdmi-rx-text', 'Connected (Unstable)');
         } else {
             setDot('auto-hdmi-rx-dot', 'disconnected');
             setText('auto-hdmi-rx-text', 'Disconnected');
         }
 
-        // HDMI TX
-        if (state.tx_connected) {
-            setDot('auto-hdmi-tx-dot', state.tx_ready ? 'connected' : 'unstable');
-            setText('auto-hdmi-tx-text', state.tx_ready ? 'Ready' : 'Connected');
+        // HDMI TX - check if ready (ready=1 and has valid resolution)
+        if (state.tx_ready) {
+            setDot('auto-hdmi-tx-dot', 'connected');
+            setText('auto-hdmi-tx-text', 'Ready');
+        } else if (state.tx_connected) {
+            setDot('auto-hdmi-tx-dot', 'unstable');
+            setText('auto-hdmi-tx-text', 'Not Ready');
         } else {
             setDot('auto-hdmi-tx-dot', 'disconnected');
             setText('auto-hdmi-tx-text', 'Disconnected');
         }
 
-        // Passthrough
+        // Passthrough / Capture readiness
+        // Can capture when RX is stable AND TX is ready with valid resolution
         if (state.can_capture) {
             setDot('auto-passthrough-dot', 'active');
             setText('auto-passthrough-text', 'Ready');
@@ -294,7 +446,7 @@ class AutoConfigurator {
             setText('auto-passthrough-text', 'Not Ready');
         }
 
-        // Resolution
+        // Resolution from TX
         if (state.width && state.height) {
             setText('auto-detected-res', `Detected: ${state.width}x${state.height}p${state.framerate || 60}`);
         } else {

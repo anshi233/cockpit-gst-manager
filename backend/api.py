@@ -198,8 +198,8 @@ if DBUS_LIBRARY == "dbus_next":
         @method()
         def GetHdmiStatus(self) -> "s":
             """Get current HDMI input status as JSON."""
+            import json
             if self.event_manager:
-                import json
                 return json.dumps(self.event_manager.get_hdmi_status())
             return json.dumps({"available": False, "error": "Event manager not initialized"})
 
@@ -240,12 +240,14 @@ if DBUS_LIBRARY == "dbus_next":
             """Get auto instance configuration.
             
             Returns:
-                JSON with config or empty object if not configured.
+                JSON with config (always returns config, using defaults if not customized)
             """
-            if self.auto_instance_manager:
-                config = self.auto_instance_manager.get_config()
-                return json.dumps(config or {})
-            return json.dumps({})
+            import json
+            if self.auto_instance_manager and self.auto_instance_manager.config:
+                return json.dumps(self.auto_instance_manager.config.to_dict())
+            # Return default config if manager not ready
+            from auto_instance import AutoInstanceConfig
+            return json.dumps(AutoInstanceConfig().to_dict())
 
         @method()
         async def SetAutoInstanceConfig(self, config_json: "s") -> "b":

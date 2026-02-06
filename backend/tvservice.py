@@ -359,12 +359,6 @@ class TvClientLib:
                 status.ready = ready_val.strip() == "1"
                 status.connected = status.ready  # If ready, TX is connected
             
-            # Read 'is_passthrough_switch' attribute
-            passthrough_path = sysfs_base / "is_passthrough_switch"
-            if passthrough_path.exists():
-                pt_val = self._read_sysfs_file(passthrough_path)
-                status.passthrough = pt_val.strip() == "1"
-            
             # Read 'disp_mode' to get resolution info
             disp_mode_path = sysfs_base / "disp_mode"
             if disp_mode_path.exists():
@@ -374,7 +368,11 @@ class TvClientLib:
                 status.height = parsed.get("height", 0)
                 status.fps = parsed.get("fps", 0)
                 status.timing_name = parsed.get("timing_name", "")
-                status.enabled = status.width > 0  # If we have resolution, output is enabled
+                status.enabled = status.width > 0 and status.height > 0
+            
+            # vdin1 is a loopback of hdmitx - we can capture when TX is ready
+            # No need to check is_passthrough_switch, just check if TX has valid output
+            status.passthrough = status.ready and status.enabled
             
             logger.debug(f"HDMI TX status: {status.to_dict()}")
             
@@ -396,15 +394,10 @@ class TvClientLib:
         """Parse disp_mode sysfs output.
         
         Example content:
-            cd/cs/cr: 8/2/0
-            ...
+            cd/cs/cr: 4/0/2
             name: 3840x2160p60hz
-            ...
-            h_active: 3840
-            v_active: 2160
-            h/v_freq: 135/60
-            ...
             width/height: 3840/2160
+            h/v_freq: 134865/59940
         """
         result = {"width": 0, "height": 0, "fps": 0, "timing_name": ""}
         
@@ -413,7 +406,7 @@ class TvClientLib:
         
         try:
             # Parse timing name (e.g., "3840x2160p60hz")
-            name_match = re.search(r'name:\s*(\S+)', content)
+            name_match = re.search(r'^name:\s*(\S+)', content, re.MULTILINE)
             if name_match:
                 timing_name = name_match.group(1)
                 result["timing_name"] = timing_name
@@ -433,11 +426,17 @@ class TvClientLib:
                     result["width"] = int(wh_match.group(1))
                     result["height"] = int(wh_match.group(2))
             
-            # Parse frequency if not already found
-            if result["fps"] == 0:
+            # Parse frequency from h/v_freq if not already found or to verify
+            # Format: h/v_freq: 134865/59940 (59940 = 59.94Hz)
+            if result["fps"] == 0 or result["fps"] < 10:  # Sometimes framerate is 59.94 not 60
                 freq_match = re.search(r'h/v_freq:\s*\d+/(\d+)', content)
                 if freq_match:
-                    result["fps"] = int(freq_match.group(1))
+                    freq_val = int(freq_match.group(1))
+                    # Convert 59940 to 60, 119880 to 120, etc.
+                    if freq_val > 1000:
+                        result["fps"] = round(freq_val / 1000)
+                    else:
+                        result["fps"] = freq_val
             
         except Exception as e:
             logger.debug(f"Failed to parse disp_mode: {e}")

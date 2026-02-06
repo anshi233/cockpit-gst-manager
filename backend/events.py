@@ -8,6 +8,7 @@ import asyncio
 import logging
 import os
 import re
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Callable, Any, Dict
@@ -92,10 +93,13 @@ def find_hdmirx_sysfs() -> Optional[Path]:
 def parse_hdmi_info(info_str: str) -> Dict[str, Any]:
     """Parse HDMI info string to extract resolution and framerate.
 
+    Handles multiple formats:
+    - "1920x1080p60hz" format
+    - Amlogic hdmirx format with Hactive/Vactive/Frame Rate
+
     Examples:
-        "1920x1080p60hz" -> {width: 1920, height: 1080, fps: 60, interlaced: False}
-        "3840x2160p30hz" -> {width: 3840, height: 2160, fps: 30, interlaced: False}
-        "1920x1080i50hz" -> {width: 1920, height: 1080, fps: 50, interlaced: True}
+        "1920x1080p60hz" -> {width: 1920, height: 1080, fps: 60}
+        "Hactive: 3840\nVactive: 2160\nFrame Rate: 5993" -> {width: 3840, height: 2160, fps: 60}
 
     Args:
         info_str: Raw info string from sysfs.
@@ -114,13 +118,39 @@ def parse_hdmi_info(info_str: str) -> Dict[str, Any]:
     if not info_str:
         return result
 
-    # Pattern: WIDTHxHEIGHT[p|i]FPShz
+    # Pattern 1: WIDTHxHEIGHT[p|i]FPShz (traditional format)
     match = re.search(r"(\d+)x(\d+)([pi])(\d+)", info_str.lower())
     if match:
         result["width"] = int(match.group(1))
         result["height"] = int(match.group(2))
         result["interlaced"] = match.group(3) == "i"
         result["fps"] = int(match.group(4))
+
+    # Pattern 2: Amlogic hdmirx format
+    # Hactive: 3840
+    # Vactive: 2160
+    # Frame Rate: 5993 (599.3Hz / 100 = 5.993Hz, actually 59.93Hz)
+    if result["width"] == 0:
+        hactive_match = re.search(r"[Hh]active:\s*(\d+)", info_str)
+        vactive_match = re.search(r"[Vv]active:\s*(\d+)", info_str)
+        fps_match = re.search(r"[Ff]rame [Rr]ate:\s*(\d+)", info_str)
+        
+        if hactive_match and vactive_match:
+            result["width"] = int(hactive_match.group(1))
+            result["height"] = int(vactive_match.group(1))
+            
+            if fps_match:
+                fps_val = int(fps_match.group(1))
+                # Frame rate might be in format 5993 (meaning 59.93Hz) or 60
+                if fps_val > 100:
+                    result["fps"] = round(fps_val / 100)
+                else:
+                    result["fps"] = fps_val
+            
+            # Check for interlace
+            interlace_match = re.search(r"[Ii]nterlace:\s*(\d+)", info_str)
+            if interlace_match:
+                result["interlaced"] = interlace_match.group(1) == "1"
 
     # Try to extract color format
     color_match = re.search(r"(rgb|yuv|ycbcr)\d*", info_str.lower())
@@ -261,6 +291,10 @@ class HdmiMonitor:
         if signal_path.exists():
             signal = read_sysfs_file(signal_path)
             status.signal_locked = signal in ("1", "locked", "true")
+        else:
+            # Some platforms don't have signal file
+            # Will determine signal_locked from info file below
+            pass
 
         # Read info (resolution/format)
         info_path = self.sysfs_path / "info"
@@ -275,7 +309,7 @@ class HdmiMonitor:
                 status.interlaced = parsed["interlaced"]
                 status.color_format = parsed["color_format"]
 
-                # If we got valid resolution, assume signal is locked
+                # If we got valid resolution, signal is locked
                 if status.width > 0 and status.height > 0:
                     status.signal_locked = True
 
@@ -505,6 +539,62 @@ class EventManager:
             on_signal_lost=self._on_hdmi_signal_lost
         )
         await self.hdmi_monitor.start()
+        
+        # Check initial state - HDMI might already be stable
+        # This handles the case where gst-manager starts after HDMI is already settled
+        await self._check_initial_state()
+    
+    async def _check_initial_state(self) -> None:
+        """Check if HDMI is already stable on startup."""
+        try:
+            # Poll for RX status up to 10 seconds (HDMI might take time to stabilize)
+            for attempt in range(10):
+                await asyncio.sleep(1)
+                
+                if not self.hdmi_monitor:
+                    continue
+                    
+                rx_status = self.hdmi_monitor.get_status()
+                logger.info(f"Initial check attempt {attempt+1}: locked={rx_status.signal_locked}, "
+                           f"w={rx_status.width}, h={rx_status.height}, source={rx_status.source}")
+                
+                # Store the status
+                self.last_hdmi_status = rx_status
+                
+                # If RX is stable (signal_locked and has resolution), we're done
+                if rx_status.signal_locked and rx_status.width > 0 and rx_status.height > 0:
+                    logger.info("HDMI RX is stable, checking TX status")
+                    self._rx_stable_time = time.time()
+                    await self._check_tx_status()
+                    return
+            
+            # If we get here, RX never became stable in 10 seconds
+            logger.info("HDMI RX did not stabilize in 10 seconds, starting periodic polling")
+            asyncio.create_task(self._periodic_polling())
+            
+        except Exception as e:
+            logger.warning(f"Failed to check initial HDMI state: {e}", exc_info=True)
+    
+    async def _periodic_polling(self) -> None:
+        """Poll HDMI state periodically until stable."""
+        while self._rx_stable_time is None:
+            try:
+                await asyncio.sleep(3)  # Check every 3 seconds
+                
+                if self.hdmi_monitor:
+                    rx_status = self.hdmi_monitor.get_status()
+                    if rx_status.signal_locked and rx_status.width > 0 and rx_status.height > 0:
+                        logger.info(f"HDMI RX became stable: {rx_status.resolution}")
+                        self._rx_stable_time = time.time()
+                        self.last_hdmi_status = rx_status
+                        # Wait 1.5s then check TX
+                        await asyncio.sleep(1.5)
+                        await self._check_tx_status()
+                        break
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.debug(f"Periodic polling error: {e}")
 
     async def stop(self) -> None:
         """Stop all event monitors."""
@@ -527,28 +617,34 @@ class EventManager:
     def get_passthrough_state(self) -> Dict[str, Any]:
         """Get current HDMI passthrough state.
         
+        vdin1 is a loopback of hdmitx (HDMI TX output).
+        Once hdmitx is ready, we can capture from vdin1.
+        
         Returns:
             Dictionary with RX/TX status and capture readiness
         """
-        from tvservice import HdmiTxStatus
-        
         rx_stable = self._rx_stable_time is not None
-        tx_connected = self._tx_status is not None and self._tx_status.connected
-        tx_ready = self._tx_status is not None and self._tx_status.ready
+        # TX ready means ready=1 and has valid resolution
+        tx_ready = (
+            self._tx_status is not None and 
+            self._tx_status.ready and 
+            self._tx_status.width > 0 and 
+            self._tx_status.height > 0
+        )
         
         return {
             "rx_connected": self.last_hdmi_status.cable_connected if self.last_hdmi_status else False,
             "rx_stable": rx_stable,
             "rx_signal_locked": self.last_hdmi_status.signal_locked if self.last_hdmi_status else False,
-            "tx_connected": tx_connected,
+            "tx_connected": self._tx_status.connected if self._tx_status else False,
             "tx_ready": tx_ready,
             "tx_enabled": self._tx_status.enabled if self._tx_status else False,
-            "passthrough_active": self._tx_status.passthrough if self._tx_status else False,
             "width": self._tx_status.width if self._tx_status else 0,
             "height": self._tx_status.height if self._tx_status else 0,
             "framerate": self._tx_status.fps if self._tx_status else 0,
             "resolution": self._tx_status.resolution if self._tx_status else "",
-            "can_capture": rx_stable and tx_ready and tx_connected
+            # Can capture when RX is stable AND TX is ready with valid resolution
+            "can_capture": rx_stable and tx_ready
         }
 
     async def _on_hdmi_status_change(self, status: HdmiStatus) -> None:
@@ -574,9 +670,11 @@ class EventManager:
         
         # Mark RX as stable
         self._rx_stable_time = time.time()
+        logger.info(f"RX marked as stable, scheduling TX check in 1.5s")
         
         # Cancel any pending TX check
         if self._tx_check_task and not self._tx_check_task.done():
+            logger.debug("Cancelling previous TX check task")
             self._tx_check_task.cancel()
         
         # Schedule TX check after 1.5 seconds
@@ -609,7 +707,9 @@ class EventManager:
             client = TvClientLib()
             self._tx_status = client.get_hdmi_tx_status()
             
-            logger.debug(f"HDMI TX status: {self._tx_status.to_dict()}")
+            logger.info(f"HDMI TX status: ready={self._tx_status.ready}, "
+                       f"connected={self._tx_status.connected}, "
+                       f"resolution={self._tx_status.width}x{self._tx_status.height}")
             
             # Evaluate passthrough state
             await self._evaluate_passthrough_state()

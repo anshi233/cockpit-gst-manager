@@ -73,6 +73,19 @@
                     
                     <!-- Auto Configurator Tab -->
                     <div id="tab-auto" class="gst-tab-content active">
+                        <!-- Auto Instance Status -->
+                        <div class="gst-auto-instance-status">
+                            <h3>Auto Capture Status</h3>
+                            <div class="gst-status-display" id="auto-instance-status">
+                                <span class="gst-status-badge gst-status-off">OFF</span>
+                                <span class="gst-status-text">Not configured</span>
+                            </div>
+                            <div class="gst-instance-actions" id="auto-instance-actions" style="display: none; margin-top: 10px;">
+                                <button id="btn-auto-start" class="gst-btn gst-btn-success">Start</button>
+                                <button id="btn-auto-stop" class="gst-btn gst-btn-warning">Stop</button>
+                            </div>
+                        </div>
+                        
                         <!-- HDMI Status Bar -->
                         <div class="gst-hdmi-status-bar">
                             <div class="gst-hdmi-indicator-row">
@@ -167,7 +180,6 @@
                         <div class="gst-form-actions">
                             <button id="btn-preview-auto" class="gst-btn gst-btn-secondary">Preview</button>
                             <button id="btn-save-auto" class="gst-btn gst-btn-primary">Save Configuration</button>
-                            <button id="btn-delete-auto" class="gst-btn gst-btn-danger" style="display: none;">Delete</button>
                         </div>
                     </div>
                     
@@ -321,11 +333,11 @@
         </div>
     </div>
 
-    <!-- Application scripts -->
+    <!-- Application scripts - gst-manager.js must be first as it initializes D-Bus -->
+    <script src="gst-manager.js"></script>
     <script src="pipeline-editor.js"></script>
     <script src="ai-chat.js"></script>
     <script src="auto-configurator.js"></script>
-    <script src="gst-manager.js"></script>
 </body>
 
 </html>
